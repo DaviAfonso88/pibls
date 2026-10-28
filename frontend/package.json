@@ -34,7 +34,7 @@
     "clsx": "^2.1.1",
     "isbot": "^5.2.2",
     "lucide-react": "^1.61.0",
-    "pdfmake": "^0.2.23",
+    "pdfmake": "^0.3.12",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "react-hook-form": "^7.90.0",
