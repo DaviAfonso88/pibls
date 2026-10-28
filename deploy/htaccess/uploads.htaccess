@@ -1,0 +1,25 @@
+# =====================================================================================================================
+# .htaccess de public_html/uploads/ (e homolog_html/uploads/). Fonte: architecture.md → Security → Uploads.
+#
+# Instalado uma vez, à mão, no setup da hospedagem (docs/runbooks/setup-hospedagem.md). O ativador NUNCA toca em
+# uploads/. Aqui nada pode executar: só ficam PDFs e imagens enviados pelo painel.
+# =====================================================================================================================
+
+Options -Indexes -ExecCGI
+
+# Qualquer arquivo que o servidor tratasse como programa deixa de ser tratado como tal
+RemoveHandler .php .phtml .phar
+<IfModule mod_php.c>
+    php_flag engine off
+</IfModule>
+<IfModule mod_php8.c>
+    php_flag engine off
+</IfModule>
+
+<FilesMatch "\.(php\d?|phtml|phar|pl|py|cgi|sh)$">
+    Require all denied
+</FilesMatch>
+
+<IfModule mod_headers.c>
+    Header set X-Content-Type-Options "nosniff"
+</IfModule>

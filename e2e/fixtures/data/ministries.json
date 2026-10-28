@@ -1,0 +1,75 @@
+{
+  "data": [
+    {
+      "id": 1,
+      "category": "MINISTERIO",
+      "name": "Comunicação",
+      "description": "<p>Cuida das redes sociais e do site.</p>",
+      "leaders_text": "Equipe de comunicação",
+      "schedule_text": null,
+      "neighborhood": null,
+      "contact_phone": null
+    },
+    {
+      "id": 2,
+      "category": "MINISTERIO",
+      "name": "Música",
+      "description": null,
+      "leaders_text": null,
+      "schedule_text": "Ensaios às quartas",
+      "neighborhood": null,
+      "contact_phone": null
+    },
+    {
+      "id": 3,
+      "category": "GRUPO",
+      "name": "Homens (UMHBB)",
+      "description": null,
+      "leaders_text": null,
+      "schedule_text": "Último sábado do mês, 20h",
+      "neighborhood": null,
+      "contact_phone": null
+    },
+    {
+      "id": 4,
+      "category": "GRUPO",
+      "name": "Mulheres (MCM)",
+      "description": null,
+      "leaders_text": null,
+      "schedule_text": "3º sábado do mês, 17h30",
+      "neighborhood": null,
+      "contact_phone": null
+    },
+    {
+      "id": 5,
+      "category": "GRUPO",
+      "name": "Crianças (Mini PIB)",
+      "description": null,
+      "leaders_text": null,
+      "schedule_text": "Domingos, 9h",
+      "neighborhood": null,
+      "contact_phone": null
+    },
+    {
+      "id": 6,
+      "category": "CELULA",
+      "name": "Célula de CL Promissão",
+      "description": null,
+      "leaders_text": null,
+      "schedule_text": "Terças, 20h",
+      "neighborhood": "Promissão",
+      "contact_phone": null
+    },
+    {
+      "id": 7,
+      "category": "CELULA",
+      "name": "Célula de CL Centro",
+      "description": null,
+      "leaders_text": null,
+      "schedule_text": "Quartas, 20h",
+      "neighborhood": "Centro",
+      "contact_phone": null
+    }
+  ],
+  "generated_at": "2026-11-08T13:10:00Z"
+}

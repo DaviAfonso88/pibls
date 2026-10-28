@@ -1,0 +1,35 @@
+################################################################################
+# Tarefas Cron do cPanel (architecture.md → Infrastructure → Cron)
+#
+# Crie as quatro tarefas abaixo em cPanel → "Tarefas Cron", com a frequência
+# "a cada 5 minutos" (*/5 * * * *). Troque USUARIO pelo usuário da conta e
+# confira o caminho do PHP 8.4 da conta (docs/runbooks/setup-hospedagem.md):
+# no cPanel costuma ser /usr/local/bin/ea-php84.
+#
+# O intervalo mínimo permitido pela hospedagem ainda é desconhecido (TBD-02).
+# Se for maior que 5 min, todas as frequências sobem para esse mínimo.
+################################################################################
+
+# 1. Ativador de releases: produção e homologação (ADR-010). Sai em menos de 1 s
+#    quando não há nada na caixa de entrada.
+*/5 * * * * /usr/local/bin/ea-php84 /home/USUARIO/private/bin/finalize.php pibls > /dev/null 2>&1
+*/5 * * * * /usr/local/bin/ea-php84 /home/USUARIO/private/bin/finalize.php pibls-homolog > /dev/null 2>&1
+
+# 2. Agendador do Laravel: produção e homologação. O wrapper resolve a release
+#    ativa pelo ponteiro current.php. É daqui que saem o worker de e-mail, os
+#    snapshots agendados, os backups, o expurgo LGPD e o resumo diário.
+*/5 * * * * /usr/local/bin/ea-php84 /home/USUARIO/private/bin/artisan.php pibls schedule:run > /dev/null 2>&1
+*/5 * * * * /usr/local/bin/ea-php84 /home/USUARIO/private/bin/artisan.php pibls-homolog schedule:run > /dev/null 2>&1
+
+################################################################################
+# Instalação dos scripts (uma vez, no setup):
+#   deploy/finalize.php            → /home/USUARIO/private/bin/finalize.php
+#   deploy/templates/artisan.php   → /home/USUARIO/private/bin/artisan.php
+#   deploy/templates/index.php     → public_html/index.php e homolog_html/index.php
+#                                    (na cópia da homologação, troque $app para 'pibls-homolog')
+#   deploy/templates/current.php   → só como referência do formato do ponteiro
+#
+# O ativador grava os logs em private/<app>/shared/storage/logs/finalize-AAAA-MM-DD.log.
+# Saída padrão e de erro vão para /dev/null para o cron não encher a caixa de
+# e-mail da conta; o que importa fica nos logs e no heartbeat do Healthchecks.
+################################################################################

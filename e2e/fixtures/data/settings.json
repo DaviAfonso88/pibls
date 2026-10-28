@@ -1,0 +1,71 @@
+{
+  "data": {
+    "schedule": [
+      {
+        "day": "Quinta-feira",
+        "recurrence": "semanal",
+        "activity": "Culto de Oração",
+        "time": "20:00",
+        "mode": "Presencial e online"
+      },
+      {
+        "day": "Domingo",
+        "recurrence": "semanal",
+        "activity": "EBD",
+        "time": "09:00",
+        "mode": "Presencial"
+      },
+      {
+        "day": "Domingo",
+        "recurrence": "semanal",
+        "activity": "Culto Matinal",
+        "time": "10:10",
+        "mode": "Presencial e YouTube"
+      },
+      {
+        "day": "Domingo",
+        "recurrence": "semanal",
+        "activity": "Culto Noturno",
+        "time": "19:30",
+        "mode": "Presencial e YouTube"
+      },
+      {
+        "day": "Sexta-feira",
+        "recurrence": "1ª do mês",
+        "activity": "Culto Salt",
+        "time": "19:30",
+        "mode": "Presencial"
+      }
+    ],
+    "campaign_notice": { "active": false, "title": "", "text": "" },
+    "lords_supper_notice": { "active": false, "text": "" },
+    "address": {
+      "street": "Rua de Exemplo",
+      "number": "100",
+      "complement": null,
+      "neighborhood": "Centro",
+      "city": "Lagoa Santa",
+      "state": "MG",
+      "zip": "33400000"
+    },
+    "map_links": {
+      "google_maps_url": "https://maps.example.com/",
+      "waze_url": "https://waze.example.com/",
+      "embed_url": "https://maps.example.com/embed"
+    },
+    "whatsapp": {
+      "phone": "+5531999990000",
+      "default_text": "Olá! Vim pelo site."
+    },
+    "youtube_links": {
+      "channel_url": "https://youtube.example.com/@exemplo",
+      "live_url": "https://youtube.example.com/live"
+    },
+    "social_links": [
+      { "network": "Instagram", "url": "https://instagram.example.com/exemplo" }
+    ],
+    "pix": null,
+    "features": { "events": false }
+  },
+  "generated_at": "2026-11-08T13:10:00Z"
+}

@@ -1,0 +1,26 @@
+{
+  "data": {
+    "latest_bulletin": {
+      "id": 9,
+      "edition_number": 1234,
+      "reference_date": "2026-11-08",
+      "title": "Boletim da semana",
+      "summary_text": null,
+      "pdf_url": "/uploads/boletins/2026/exemplo.pdf",
+      "pdf_size_bytes": 1843200
+    },
+    "latest_posts": [
+      {
+        "id": 5,
+        "title": "Uma palavra de esperança",
+        "slug": "uma-palavra-de-esperanca",
+        "excerpt": "Resumo da mensagem.",
+        "author_display": null,
+        "youtube_video_id": null,
+        "published_at": "2026-11-06T12:00:00Z"
+      }
+    ],
+    "upcoming_events": []
+  },
+  "generated_at": "2026-11-08T13:10:00Z"
+}
