@@ -1,0 +1,9 @@
+build/
+.react-router/
+coverage/
+node_modules/
+package-lock.json
+app/shared/api-types.ts
+.lighthouseci/
+scripts/og-default.html
+app/content/snapshots/

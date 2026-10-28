@@ -1,0 +1,257 @@
+/*
+ * Único CSS global do projeto (ADR-018). Todo o resto é classe do Tailwind no JSX.
+ *
+ * Aqui moram:
+ *   1. a configuração do Tailwind 4 e do shadcn/ui;
+ *   2. os TOKENS SEMÂNTICOS, que são o único lugar onde aparece um valor de cor (hex). Os componentes só usam
+ *      `bg-primary`, `text-muted-foreground`, `border-input`… nunca `bg-blue-600`;
+ *   3. os estilos base (tipografia, foco, alvos de toque) e as duas regras que ficam FORA de @layer.
+ *
+ * A identidade visual oficial da igreja (TBD-10) troca só as variáveis de :root. As cores da marca vêm do Manual da
+ * Marca PIBLS; neutros, estados e destaque seguem o canvas "Portal PIBLS — Páginas" (board Main) e o CLAUDE.md.
+ * Só tema claro: não existe bloco `.dark`.
+ * Fonte: a do sistema. Proibido carregar fonte de CDN (a CSP bloqueia e o pedido enviaria o IP do visitante a terceiros).
+ */
+
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@plugin "@tailwindcss/typography";
+
+/* `dark:` dos componentes gerados só vale dentro de `.dark`, que nunca é aplicado: o site é só claro. */
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-heading: var(--font-sans);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-info: var(--info);
+  --color-info-border: var(--info-border);
+  --color-info-foreground: var(--info-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-highlight: var(--highlight);
+  --color-highlight-foreground: var(--highlight-foreground);
+  --color-whatsapp: var(--whatsapp);
+  --color-whatsapp-foreground: var(--whatsapp-foreground);
+  --color-footer: var(--footer);
+  --color-footer-foreground: var(--footer-foreground);
+  --color-footer-text: var(--footer-text);
+  --color-footer-muted: var(--footer-muted);
+  --color-footer-border: var(--footer-border);
+
+  /* Os raios do shadcn derivam de --radius: botões 12 px (lg) e cartões 14–17 px (xl) */
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+  /* Superfícies e texto */
+  --background: #ffffff;
+  --foreground: #1c1917;
+  --card: #ffffff;
+  --card-foreground: #1c1917;
+  --popover: #ffffff;
+  --popover-foreground: #1c1917;
+  --muted: #eaf3f5; /* fundo de seção: o "gelo" da paleta principal */
+  --muted-foreground: #57534e; /* texto secundário (6,8:1 sobre o gelo) */
+
+  /*
+   * Marca: Manual da Marca PIBLS (TBD-10). Os azuis-petróleo da paleta principal. O #00879D e o #6AC5D6 ficam
+   * fora dos botões e do texto (o primeiro não chega a 4,5:1 com branco nem com preto); o #59ACBF só em detalhe.
+   * A paleta secundária do manual é para evento especial e não entra no tema.
+   */
+  --primary: #2a6c82; /* Pantone 2392: 5,9:1 com texto branco */
+  --primary-hover: #043546; /* Pantone 303: 13,1:1 */
+  --primary-foreground: #ffffff;
+  --secondary: #eaf3f5;
+  --secondary-foreground: #1c1917;
+  --accent: #eaf3f5; /* fundo de item em foco ou sob o mouse (menus, botão fantasma) */
+  --accent-foreground: #043546;
+
+  /* Bordas e foco */
+  --border: #e7e5e4;
+  --border-strong: #a8a29e; /* borda do botão secundário */
+  /* Campos de formulário: o contorno precisa de contraste ≥ 3:1 com o fundo (WCAG 1.4.11), então não usa --border */
+  --input: #78716c;
+  --ring: #00879d; /* Pantone 7712: 4,2:1 sobre branco e 3,8:1 sobre o gelo */
+
+  /* Estados e avisos */
+  --destructive: #b91c1c;
+  --destructive-foreground: #ffffff;
+  --info: #eaf3f5;
+  --info-border: #59acbf; /* Pantone 7702 */
+  --info-foreground: #043546;
+  --warning: #fef3c7;
+  --warning-foreground: #78350f;
+  --success: #dcfce7;
+  --success-foreground: #14532d;
+
+  /* Destaque da campanha e WhatsApp */
+  --highlight: #fbbf24;
+  --highlight-foreground: #1c1917;
+  --whatsapp: #166534;
+  --whatsapp-foreground: #ffffff;
+
+  /* Rodapé escuro do site: fundo, texto forte (nome, links), texto corrido, texto discreto e linha divisória */
+  --footer: #043546;
+  --footer-foreground: #eaf3f5;
+  --footer-text: #d5e6ea;
+  --footer-muted: #8fc3d1;
+  --footer-border: #2a6c82;
+
+  --radius: 0.75rem;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  html {
+    @apply font-sans;
+    /* Evita o iOS aumentar o texto por conta própria ao girar o aparelho */
+    -webkit-text-size-adjust: 100%;
+  }
+
+  /* Corpo 17 px / 1.55, como no design */
+  body {
+    @apply bg-background text-foreground;
+    font-size: 1.0625rem;
+    line-height: 1.55;
+  }
+
+  h1,
+  h2,
+  h3 {
+    @apply font-heading font-extrabold text-balance;
+    line-height: 1.2;
+  }
+
+  h1 {
+    font-size: 2.125rem; /* 34 px */
+  }
+
+  h2 {
+    font-size: 1.5rem; /* 24 px */
+  }
+
+  h3 {
+    font-size: 1.25rem; /* 20 px */
+  }
+
+  /* Foco sempre visível: contorno de 3 px (o design pede), em teclado e leitor de tela */
+  :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+    outline: 3px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  /* Texto selecionável em imagens e SVG decorativos não deve capturar o toque */
+  svg {
+    @apply shrink-0;
+  }
+}
+
+/* Container do design: até 1120 px, com 16 px de margem lateral */
+@utility container {
+  margin-inline: auto;
+  max-width: 70rem;
+  padding-inline: 1rem;
+}
+
+/*
+ * HTML sanitizado (mensagens da Palavra Viva, avisos) vem dentro de `prose`. As cores do plugin de tipografia viram
+ * tokens do tema, para a identidade visual continuar mudando em um lugar só.
+ */
+@layer components {
+  .prose {
+    --tw-prose-body: var(--foreground);
+    --tw-prose-headings: var(--foreground);
+    --tw-prose-lead: var(--muted-foreground);
+    --tw-prose-links: var(--primary);
+    --tw-prose-bold: var(--foreground);
+    --tw-prose-counters: var(--muted-foreground);
+    --tw-prose-bullets: var(--muted-foreground);
+    --tw-prose-hr: var(--border);
+    --tw-prose-quotes: var(--foreground);
+    --tw-prose-quote-borders: var(--border-strong);
+    --tw-prose-captions: var(--muted-foreground);
+    --tw-prose-code: var(--foreground);
+    --tw-prose-pre-code: var(--foreground);
+    --tw-prose-pre-bg: var(--muted);
+    --tw-prose-th-borders: var(--border-strong);
+    --tw-prose-td-borders: var(--border);
+  }
+}
+
+/*
+ * As duas regras abaixo ficam FORA de @layer de propósito.
+ */
+
+/* Quem pede menos movimento não vê animação nem transição nenhuma (WCAG 2.3.3). Sem @layer para vencer os utilitários. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/*
+ * Aviso de navegador desatualizado (Frontend Architecture, regra 13). O Tailwind 4 exige `color-mix()`; um navegador
+ * que não o tem mostra a página sem formatação, então este aviso não pode depender do Tailwind nem de @layer (que
+ * esses navegadores também podem não entender). É só CSS, sem JavaScript, e funciona no HTML pré-renderizado.
+ */
+.browser-outdated {
+  display: none;
+}
+
+@supports not (color: color-mix(in srgb, red, blue)) {
+  .browser-outdated {
+    display: block;
+    padding: 12px 16px;
+    background: #fef3c7;
+    color: #78350f;
+    border-bottom: 2px solid #78350f;
+    font:
+      16px/1.5 system-ui,
+      sans-serif;
+  }
+
+  .browser-outdated a {
+    color: inherit;
+    font-weight: 700;
+    text-decoration: underline;
+  }
+}

@@ -1,0 +1,153 @@
+/**
+ * Textos das caixas de contatos do painel (design: AdminContatos e AdminContato). Ficam fora de `~/shared/messages` porque o
+ * painel é carregado sob demanda (orçamento de bundle, RNF-05). As frases das regras (BR-008, BR-009, BR-013, BR-081) vêm da
+ * própria API e são exibidas como chegam.
+ */
+export const inboxMessages = {
+  general: {
+    title: "Contatos",
+    intro: "Você vê só os tipos de contato que estão sob a sua responsabilidade.",
+    back: "Contatos",
+    openCount: (total: number): string =>
+      `${total} ${total === 1 ? "contato aberto" : "contatos abertos"}`,
+    allCount: (total: number): string => `${total} ${total === 1 ? "contato" : "contatos"}`,
+    detailTitle: (name: string): string => `Contato de ${name}`,
+  },
+  prayer: {
+    title: "Pedidos de oração",
+    intro: "Os pedidos são vistos só pela equipe de oração e não aparecem na caixa de contatos.",
+    back: "Pedidos de oração",
+    openCount: (total: number): string =>
+      `${total} ${total === 1 ? "pedido aberto" : "pedidos abertos"}`,
+    allCount: (total: number): string => `${total} ${total === 1 ? "pedido" : "pedidos"}`,
+    detailTitle: (name: string): string => `Pedido de oração de ${name}`,
+  },
+
+  filters: {
+    label: "Filtrar contatos",
+    type: "Tipo",
+    allTypes: "Todos",
+    status: "Status",
+    open: "Abertos (novo e em atendimento)",
+    allStatuses: "Todos",
+    assignee: "Responsável",
+    anyone: "Qualquer um",
+    me: "Comigo",
+    none: "Sem responsável",
+    search: "Buscar por nome ou telefone",
+    searchHint: "Pelo menos 2 letras ou números.",
+    submit: "Filtrar",
+    clear: "Limpar filtros",
+  },
+
+  types: {
+    VISITANTE: "Sou visitante",
+    MEMBRO: "Quero ser membro",
+    CONTATO: "Fale conosco",
+    MINISTERIO: "Ministério",
+    ORACAO: "Pedido de oração",
+  },
+  statuses: {
+    NOVO: "Novo",
+    EM_ATENDIMENTO: "Em atendimento",
+    CONCLUIDO: "Concluído",
+  },
+
+  list: {
+    caption: "Contatos recebidos",
+    captionPrayer: "Pedidos de oração recebidos",
+    type: "Tipo",
+    name: "Nome",
+    received: "Recebido",
+    status: "Status",
+    assignee: "Responsável",
+    anonymous: "Anônimo",
+    noAssignee: "Sem responsável",
+    inactiveSuffix: " (inativo)",
+    stalledLegend: "Destaque: sem atendimento há mais de 3 dias",
+    waiting: (days: number): string => `Aguardando há ${days} ${days === 1 ? "dia" : "dias"}`,
+    empty: "Nenhum contato com esses filtros.",
+    emptyPrayer: "Nenhum pedido com esses filtros.",
+    loadError: "Não foi possível carregar os contatos agora.",
+    pagesLabel: "Páginas",
+    showing: (from: number, to: number, total: number): string =>
+      `Mostrando ${from}–${to} de ${total}`,
+    previous: "Anterior",
+    next: "Próxima",
+    page: (page: number): string => `Página ${page}`,
+  },
+
+  detail: {
+    sent: "O que a pessoa enviou",
+    message: "Mensagem",
+    noMessage: "Sem mensagem.",
+    received: (when: string): string => `Recebido em ${when}`,
+    consent: (version: string): string => `aceitou a Política de Privacidade versão ${version}`,
+    waiting: (days: number): string =>
+      `Aguardando atendimento há ${days} ${days === 1 ? "dia" : "dias"}`,
+    whatsapp: "Responder no WhatsApp",
+    fields: {
+      phone: "WhatsApp",
+      email: "E-mail",
+      neighborhood: "Bairro",
+      wantsVisit: "Quer receber visita",
+      wantsCellGroup: "Quer conhecer uma Célula de CL",
+      group: "Grupo de interesse",
+      fromOtherChurch: "É membro de outra igreja batista",
+      ministry: "Ministério procurado",
+      notProvided: "Não informado",
+      yes: "Sim",
+      no: "Não",
+    },
+    note: {
+      title: "Anotação interna",
+      hint: "Só a equipe vê. Não escreva dados de saúde ou detalhes do pedido de oração.",
+      label: "Anotação",
+      counter: (count: number): string => `${count.toLocaleString("pt-BR")} de 1.000 caracteres`,
+      save: "Salvar anotação",
+      saving: "Salvando…",
+      saved: "Anotação salva.",
+    },
+    history: {
+      title: "Histórico",
+      received: "Contato recebido pelo site",
+      noteBy: (who: string): string => `Anotação de ${who}`,
+      statusBy: (label: string, who: string): string => `${label} por ${who}`,
+      assignedBy: (who: string): string => `Responsável trocado por ${who}`,
+      empty: "Nenhum atendimento registrado ainda.",
+    },
+    handling: {
+      title: "Atendimento",
+      current: "Status atual:",
+      start: "Começar atendimento",
+      finish: "Marcar como concluído",
+      reopen: "Reabrir atendimento",
+      giveBack: "Devolver à fila",
+      assignee: "Responsável",
+      assigneeHint: "Só aparecem pessoas com acesso a este tipo de contato.",
+      me: (name: string): string => `Eu — ${name}`,
+      inactive: (name: string): string => `${name} (inativo)`,
+      inactiveWarning: "Responsável inativo. Reatribua este contato.",
+      unassigned: "Sem responsável",
+      statusUpdated: "Atendimento atualizado.",
+      readOnly: "Você pode ler este contato, mas não atendê-lo.",
+    },
+    erase: {
+      title: "Pedido do titular",
+      text: "Use só quando a própria pessoa pedir para apagar os dados dela. A exclusão é definitiva e fica registrada no histórico da igreja.",
+      button: "Excluir dados desta pessoa",
+      dialogTitle: (name: string): string => `Excluir os dados de ${name}?`,
+      dialogText:
+        "Nome, telefone, e-mail, mensagem e anotações serão apagados agora. Isso não pode ser desfeito.",
+      ack: "Confirmo que a própria pessoa pediu a exclusão.",
+      confirm: "Excluir definitivamente",
+      doneTitle: "Dados excluídos",
+      doneText:
+        "O contato foi apagado. Fica só o registro de que houve uma exclusão a pedido do titular, sem os dados pessoais.",
+      back: "Voltar para contatos",
+      backPrayer: "Voltar para pedidos de oração",
+    },
+    notFound: "Contato não encontrado.",
+    loadError: "Não foi possível carregar este contato agora.",
+  },
+} as const;
