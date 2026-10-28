@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+         bootstrap="vendor/autoload.php"
+         colors="true"
+>
+    <testsuites>
+        <testsuite name="Unit">
+            <directory>tests/Unit</directory>
+        </testsuite>
+        <testsuite name="Feature">
+            <directory>tests/Feature</directory>
+        </testsuite>
+        <testsuite name="Arch">
+            <directory>tests/Arch</directory>
+        </testsuite>
+        <!-- Ativador de release (deploy/finalize.php): PHP puro, sem o Laravel; roda aqui para usar o mesmo Pest -->
+        <testsuite name="Deploy">
+            <directory>../deploy/tests</directory>
+        </testsuite>
+    </testsuites>
+    <!-- Cobertura (PCOV, só no CI e local): Actions, Policies, ValueObjects e Enums
+         de app/Modules/* e os ValueObjects comuns (Constituição V; meta ≥ 80%). -->
+    <source>
+        <include>
+            <directory>app/Modules/*/Actions</directory>
+            <directory>app/Modules/*/Policies</directory>
+            <directory>app/Modules/*/ValueObjects</directory>
+            <directory>app/Modules/*/Enums</directory>
+            <directory>app/Shared/ValueObjects</directory>
+        </include>
+    </source>
+    <php>
+        <env name="APP_ENV" value="testing"/>
+        <env name="APP_MAINTENANCE_DRIVER" value="file"/>
+        <env name="BCRYPT_ROUNDS" value="4"/>
+        <env name="CACHE_STORE" value="array"/>
+        <env name="CACHE_LIMITER_STORE" value="array"/>
+        <env name="LOG_CHANNEL" value="null"/>
+        <env name="SENTRY_LARAVEL_DSN" value=""/>
+        <env name="FEATURE_EVENTS" value="false"/>
+        <env name="APP_RELEASE" value="dev"/>
+        <env name="API_DOCS_ENABLED" value="false"/>
+        <!-- MySQL real, sem mock. No CI, DB_HOST vem do ambiente (serviço do Actions). -->
+        <env name="DB_CONNECTION" value="mysql"/>
+        <env name="DB_HOST" value="mysql"/>
+        <env name="DB_PORT" value="3306"/>
+        <env name="DB_DATABASE" value="pibls_test"/>
+        <env name="DB_USERNAME" value="pibls_app"/>
+        <env name="DB_PASSWORD" value="secret"/>
+        <env name="DB_URL" value=""/>
+        <env name="MAIL_MAILER" value="array"/>
+        <env name="QUEUE_CONNECTION" value="sync"/>
+        <env name="SESSION_DRIVER" value="array"/>
+        <env name="SNAPSHOTS_PATH" value="/tmp/pibls-tests/public/data"/>
+        <env name="UPLOADS_PATH" value="/tmp/pibls-tests/uploads"/>
+        <env name="PULSE_ENABLED" value="false"/>
+        <env name="TELESCOPE_ENABLED" value="false"/>
+        <env name="NIGHTWATCH_ENABLED" value="false"/>
+    </php>
+</phpunit>

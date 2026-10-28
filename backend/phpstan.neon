@@ -1,0 +1,14 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+
+parameters:
+    level: 6
+    paths:
+        - app
+        - bootstrap
+        - config
+        - database
+        - routes
+    # Os testes são Pest: `$this` é resolvido em tempo de execução, `expect()->not` e `Log::shouldHaveReceived()` são
+    # dinâmicos, e o PHPStan os lê como erro. O código de produção, que é o que importa, é analisado por inteiro.
+    # Os testes rodam em duas versões do MySQL no CI, que é onde eles se verificam.
