@@ -1,0 +1,35 @@
+name: Lembretes de manutenção
+
+# Rotina de manutenção (architecture.md → DevOps → Rotina de manutenção; T202). Todo dia 1, às 08:00 de São Paulo, abre uma
+# issue com o checklist de cada lembrete que vence no mês (operação enxuta, ADR-021):
+#   mensal (todo mês, curto) · anual (fev: janela de atualização, teste de restauração, kit e acessos).
+# Os checklists estão em `deploy/lembretes/`; a lógica, em `deploy/ci/abrir-lembretes.sh`. Executar de novo no mesmo mês não
+# duplica a issue. Só precisa da permissão de escrever issues: nenhum segredo.
+
+on:
+  schedule:
+    - cron: "0 11 1 * *" # 11:00 UTC = 08:00 em São Paulo
+  workflow_dispatch:
+    inputs:
+      tipos:
+        description: "Lembretes a abrir agora, separados por vírgula (mensal, anual). Vazio = os do mês."
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  abrir:
+    name: Abrir as issues do mês
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Abrir as issues
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TIPOS: ${{ inputs.tipos }}
+        run: bash deploy/ci/abrir-lembretes.sh

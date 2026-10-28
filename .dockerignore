@@ -1,0 +1,17 @@
+.git
+.github
+.claude
+.specify
+specs
+docs
+e2e
+load
+testsprite_tests
+node_modules
+frontend
+vendor
+coverage
+*.log
+.env
+.env.*
+!.env.example

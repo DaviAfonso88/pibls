@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "context7": {
+      "type": "http",
+      "url": "https://mcp.context7.com/mcp",
+      "headers": {
+        "CONTEXT7_API_KEY": "${CONTEXT7_API_KEY}"
+      }
+    },
+    "TestSprite": {
+      "type": "stdio",
+      "command": "cmd",
+      "args": ["/c", "npx", "-y", "@testsprite/testsprite-mcp@latest"],
+      "env": {
+        "API_KEY": "${TESTSPRITE_API_KEY}"
+      }
+    }
+  }
+}

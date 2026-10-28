@@ -1,0 +1,255 @@
+name: Deploy
+
+# Pipeline de CD (architecture.md → DevOps → Pipeline de CD; ADR-010).
+#
+#   CI verde em main ──► build ──► homologação (automático + E2E de fumaça) ──► produção (aprovação manual)
+#
+# - Homologação: dispara sozinha quando o CI passa em `main`.
+# - Produção: só por `workflow_dispatch` ou por tag `vAAAA.MM.N`, depois da homologação, e exige a aprovação do
+#   responsável no Environment `production`. Dentro da janela (seg–qua, 9h–18h, America/Sao_Paulo), ou com
+#   `hotfix=true` + justificativa. Falha se houver conteúdo provisório (TODO(TBD-…)) no seed ou no conteúdo fixo.
+# - O mesmo pacote vai para os dois ambientes: ele não leva segredo (o .env mora só no servidor).
+# - O ativador (finalize.php, no cron do servidor) instala o pacote; este workflow só envia e espera a resposta.
+#
+# Configuração no GitHub (docs/runbooks/setup-hospedagem.md):
+#   Environment `homolog`:    secrets FTP_HOST, FTP_USER, FTP_PASSWORD, BASIC_AUTH ("usuario:senha"); variável SITE_URL
+#   Environment `production`: secrets FTP_HOST, FTP_USER, FTP_PASSWORD; variável SITE_URL; revisor obrigatório
+#   Variável do repositório VITE_SENTRY_DSN (DSN público do Sentry para o build do frontend)
+#   Variáveis do repositório VITE_ANALYTICS_SRC e VITE_ANALYTICS_ENDPOINT (GoatCounter, ADR-022; vazias = sem medição)
+#
+# As Actions ficam fixadas por SHA de commit (o tag vai no comentário); o Dependabot abre o PR de atualização.
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      hotfix:
+        description: "Hotfix: libera o deploy de produção fora da janela (exige justificativa)"
+        type: boolean
+        default: false
+      justification:
+        description: "Justificativa do hotfix (obrigatória com hotfix=true)"
+        type: string
+        default: ""
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+# Um deploy por vez; nunca cancela um deploy em andamento
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build do pacote de release
+    # O CI precisa ter passado; os demais gatilhos (manual e tag) seguem direto
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    outputs:
+      release_id: ${{ steps.release.outputs.release_id }}
+      git_sha: ${{ steps.sha.outputs.git_sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          persist-credentials: false
+
+      - name: Commit empacotado
+        id: sha
+        run: echo "git_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Id da release (CalVer AAAA.MM.N)
+        id: release
+        run: bash deploy/ci/next-release-id.sh
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2 (tag móvel; este é o commit atual)
+        with:
+          php-version: "8.4"
+          extensions: pdo_mysql, mbstring, sodium, gd, fileinfo, curl, zip, intl, bcmath
+          ini-values: opcache.enable=0, opcache.enable_cli=0, memory_limit=512M
+          tools: composer:v2
+
+      - name: Frontend (npm ci e react-router build)
+        working-directory: frontend
+        env:
+          VITE_SENTRY_DSN: ${{ vars.VITE_SENTRY_DSN }}
+          VITE_RELEASE: ${{ steps.release.outputs.release_id }}
+          # Medição de uso (ADR-022): `count.js` e endereço de envio do GoatCounter. Vazios = o build não leva script nenhum.
+          VITE_ANALYTICS_SRC: ${{ vars.VITE_ANALYTICS_SRC }}
+          VITE_ANALYTICS_ENDPOINT: ${{ vars.VITE_ANALYTICS_ENDPOINT }}
+          # Snapshot de fallback embutido no build (FR-011): URL base dos /data/*.json já publicados, ex.:
+          # https://pibls.com/data. Vazio (primeira publicação) = o build não leva snapshot.
+          BUILD_SNAPSHOTS_FROM: ${{ vars.BUILD_SNAPSHOTS_FROM }}
+        run: |
+          npm ci
+          npm run build
+
+      - name: Backend (composer sem dev, autoloader otimizado e classmap autoritativo)
+        working-directory: backend
+        run: composer install --no-dev --no-interaction --no-progress --prefer-dist --optimize-autoloader --classmap-authoritative
+
+      - name: Montar backend/ e spa/ (sem testes, sem segredo e sem arquivos de desenvolvimento)
+        run: |
+          set -euo pipefail
+          mkdir -p stage/backend stage/spa
+
+          rsync -a \
+            --exclude='/tests/' --exclude='/storage/' --exclude='/public/' --exclude='/node_modules/' \
+            --exclude='.env' --exclude='.env.*' --exclude='/.phpunit.cache/' \
+            --exclude='/phpunit.xml' --exclude='/phpstan.neon' --exclude='/pint.json' \
+            --exclude='/README.md' --exclude='/.editorconfig' --exclude='/.gitattributes' --exclude='/.gitignore' \
+            --exclude='/database/*.sqlite' \
+            backend/ stage/backend/
+
+          rsync -a frontend/build/client/ stage/spa/
+          # O fallback da SPA (rotas do painel e 404) é o index.html do build quando o prerender ainda não o gerou
+          if [ ! -f stage/spa/__spa-fallback.html ]; then cp stage/spa/index.html stage/spa/__spa-fallback.html; fi
+          # Regras do Apache: o ativador mescla este bloco ao .htaccess do docroot (deploy/htaccess)
+          cp deploy/htaccess/public_html.htaccess stage/spa/.htaccess
+
+          test ! -e stage/backend/.env || { echo "::error::.env no pacote"; exit 1; }
+          test -f stage/backend/vendor/autoload.php
+
+      - name: Pacote e manifest (SHA-256 de cada arquivo)
+        run: php deploy/build-release-package.php stage "${{ steps.release.outputs.release_id }}" "${{ steps.sha.outputs.git_sha }}" out
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-package
+          path: out/
+          if-no-files-found: error
+          retention-days: 14
+
+  homologacao:
+    name: Homologação (envio, ativação, health e E2E de fumaça)
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    environment:
+      name: homolog
+      url: ${{ vars.SITE_URL }}
+    env:
+      RELEASE_ID: ${{ needs.build.outputs.release_id }}
+      FTP_HOST: ${{ secrets.FTP_HOST }}
+      FTP_USER: ${{ secrets.FTP_USER }}
+      FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.build.outputs.git_sha }}
+          persist-credentials: false
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-package
+          path: out
+
+      - name: Instalar lftp
+        run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends lftp
+
+      - name: Enviar o pacote por FTPS (o manifest por último)
+        run: bash deploy/ci/upload-release.sh out "$RELEASE_ID"
+
+      - name: Esperar o ativador (até 15 min)
+        run: bash deploy/ci/wait-for-status.sh "$RELEASE_ID"
+
+      - name: GET /api/health devolve a release nova
+        env:
+          BASIC_AUTH: ${{ secrets.BASIC_AUTH }}
+        run: bash deploy/ci/verify-health.sh "${{ vars.SITE_URL }}" "$RELEASE_ID"
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: e2e/package-lock.json
+
+      - name: E2E de fumaça em homologação
+        working-directory: e2e
+        env:
+          E2E_BASE_URL: ${{ vars.SITE_URL }}
+          E2E_BASIC_AUTH: ${{ secrets.BASIC_AUTH }}
+          E2E_EXPECT_RELEASE: ${{ needs.build.outputs.release_id }}
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+          npx playwright test --project=publico-360 --grep @smoke
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: failure()
+        with:
+          name: playwright-report-homolog
+          path: e2e/playwright-report/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  producao:
+    name: Produção (aprovação manual, janela e conteúdo definitivo)
+    needs: [build, homologacao]
+    # Só por disparo manual ou por tag, e só a partir de main ou de uma tag de release
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+      || startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    environment:
+      name: production
+      url: ${{ vars.SITE_URL }}
+    env:
+      RELEASE_ID: ${{ needs.build.outputs.release_id }}
+      FTP_HOST: ${{ secrets.FTP_HOST }}
+      FTP_USER: ${{ secrets.FTP_USER }}
+      FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.build.outputs.git_sha }}
+          persist-credentials: false
+
+      - name: Janela de deploy (seg–qua, 9h–18h, America/Sao_Paulo)
+        env:
+          HOTFIX: ${{ inputs.hotfix }}
+          JUSTIFICATION: ${{ inputs.justification }}
+        run: bash deploy/ci/check-window.sh
+
+      - name: Conteúdo provisório nunca vai para produção
+        run: bash deploy/ci/check-no-provisional-content.sh
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-package
+          path: out
+
+      - name: Instalar lftp
+        run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends lftp
+
+      - name: Enviar o pacote por FTPS (o manifest por último)
+        run: bash deploy/ci/upload-release.sh out "$RELEASE_ID"
+
+      - name: Esperar o ativador (até 15 min)
+        run: bash deploy/ci/wait-for-status.sh "$RELEASE_ID"
+
+      - name: GET /api/health devolve a release nova
+        run: bash deploy/ci/verify-health.sh "${{ vars.SITE_URL }}" "$RELEASE_ID"
+
+      - name: Resumo
+        run: |
+          {
+            echo "### Release ${RELEASE_ID} ativa em produção"
+            echo ""
+            echo "- Commit: \`${{ needs.build.outputs.git_sha }}\`"
+            echo "- Rollback: workflow **Rollback**, informando \`${RELEASE_ID}\` ou deixando vazio para voltar à anterior"
+          } >> "$GITHUB_STEP_SUMMARY"

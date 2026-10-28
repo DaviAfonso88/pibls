@@ -1,0 +1,84 @@
+name: OWASP ZAP baseline
+
+# Varredura passiva semanal da homologação (T160, QA-01; docs/runbooks/asvs-l1.md). O ZAP baseline só observa: abre o site,
+# segue os links por alguns minutos e avisa de cabeçalhos, cookies e vazamentos. Não ataca, não envia formulários e não derruba
+# nada, então é seguro contra a homologação (nunca aponte para a produção: o ZAP faz centenas de requisições).
+#
+# Resultado: o relatório HTML e o JSON ficam como artefato da execução. A execução FALHA se houver alerta de nível FAIL (alto);
+# alertas médios e avisos não derrubam, mas aparecem no relatório e entram no checklist do ASVS. As exceções aceitas estão em
+# `deploy/zap/rules.tsv`, com o motivo. A homologação fica atrás de HTTP Basic: o segredo `BASIC_AUTH` ("usuario:senha") vai
+# num cabeçalho `Authorization` posto pelo próprio ZAP.
+#
+# A imagem usa a tag `stable` do ZAP, que o projeto mantém; para travar uma versão, troque por uma tag numerada.
+
+on:
+  schedule:
+    - cron: "0 12 * * 1" # segunda-feira, 09:00 em São Paulo
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: zap
+  cancel-in-progress: false
+
+jobs:
+  baseline:
+    name: ZAP baseline em homologação
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment:
+      name: homolog
+      url: ${{ vars.SITE_URL }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Rodar o ZAP baseline
+        env:
+          SITE_URL: ${{ vars.SITE_URL }}
+          BASIC_AUTH: ${{ secrets.BASIC_AUTH }}
+        run: |
+          set -u
+          if [ -z "${SITE_URL}" ]; then
+            echo "::error::A variável SITE_URL do Environment homolog não está definida."
+            exit 1
+          fi
+          case "${SITE_URL}" in
+            https://homolog.*) ;;
+            *) echo "::error::O ZAP só roda contra a homologação (https://homolog.…), nunca contra ${SITE_URL}."; exit 1 ;;
+          esac
+
+          mkdir -p zap-out
+          chmod 777 zap-out
+          cp deploy/zap/rules.tsv zap-out/rules.tsv
+
+          auth_args=()
+          if [ -n "${BASIC_AUTH}" ]; then
+            encoded="$(printf '%s' "${BASIC_AUTH}" | base64 -w0)"
+            echo "::add-mask::${encoded}"
+            auth_args=(-z "-config replacer.full_list(0).description=basic -config replacer.full_list(0).enabled=true -config replacer.full_list(0).matchtype=REQ_HEADER -config replacer.full_list(0).matchstr=Authorization -config replacer.full_list(0).regex=false -config replacer.full_list(0).replacement='Basic ${encoded}'")
+          fi
+
+          set +e
+          docker run --rm -v "${PWD}/zap-out:/zap/wrk/:rw" ghcr.io/zaproxy/zaproxy:stable \
+            zap-baseline.py -t "${SITE_URL}" -c rules.tsv -r zap-report.html -J zap-report.json -m 5 "${auth_args[@]}"
+          code=$?
+          set -e
+
+          echo "ZAP terminou com o código ${code} (0 = limpo, 1 = alerta FAIL, 2 = avisos, 3 = erro do ZAP)."
+          # Avisos (2) não derrubam; falha de alerta (1) e erro do próprio ZAP (3 ou mais) derrubam
+          if [ "${code}" -eq 1 ] || [ "${code}" -ge 3 ]; then
+            exit 1
+          fi
+
+      - name: Guardar o relatório
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: zap-relatorio
+          path: |
+            zap-out/zap-report.html
+            zap-out/zap-report.json
+          if-no-files-found: warn
+          retention-days: 30

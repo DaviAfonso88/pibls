@@ -1,0 +1,1950 @@
+openapi: 3.1.0
+info:
+  title: Portal PIBLS — API
+  version: 0.1.0-design
+  description: |
+    Contrato de desenho da API do Portal PIBLS (spec 001), derivado de
+    `architecture.md` → API Standards e Contratos por Endpoint.
+
+    - Mesma origem (`https://pibls.com`); sem CORS; sem versão na URI.
+    - Toda mudança precisa ser compatível com a release anterior: só acrescentar campos e
+      remover só depois de uma release.
+    - O OpenAPI definitivo é **gerado do código pelo Scramble**. O CI compara os tipos gerados
+      (`openapi-typescript`) com os versionados. Este arquivo é a referência de desenho:
+      divergência sem ADR é defeito.
+    - Datas na resposta em ISO 8601 UTC; na entrada, ISO 8601 com fuso. Datas sem hora: `AAAA-MM-DD`.
+    - Escrita (POST/PATCH/DELETE) exige `GET /sanctum/csrf-cookie` antes e o cabeçalho `X-XSRF-TOKEN`.
+    - Erros sempre no envelope `{ "error": { code, message, details, traceId } }`.
+servers:
+  - url: https://pibls.com
+    description: Produção
+  - url: https://homolog.pibls.com
+    description: Homologação (HTTP Basic + noindex)
+  - url: http://localhost:8080
+    description: Local (Docker Compose)
+tags:
+  - name: Infra
+  - name: Público
+  - name: Autenticação
+  - name: Painel — usuários
+  - name: Painel — contatos
+  - name: Painel — boletins
+  - name: Painel — Palavra Viva
+  - name: Painel — eventos (R2)
+  - name: Painel — ministérios
+  - name: Painel — configurações e PIX
+
+paths:
+  # ───────────────────────────── Infra ─────────────────────────────
+  /sanctum/csrf-cookie:
+    get:
+      tags: [Infra]
+      summary: Grava os cookies de sessão e XSRF-TOKEN
+      x-rate-limit: public-read
+      responses:
+        '204': { description: Cookies gravados }
+  /api/health:
+    get:
+      tags: [Infra]
+      summary: Saúde da aplicação (sobe + SELECT 1)
+      x-rate-limit: public-read
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, release]
+                properties:
+                  status: { type: string, const: ok }
+                  release: { type: string, example: '2026.11.3' }
+        '503':
+          description: Degradado (sem detalhes internos)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, const: degraded }
+
+  # ───────────────────────────── Público ─────────────────────────────
+  /api/public/settings:
+    get:
+      tags: [Público]
+      summary: Configurações públicas (BR-050) + feature flags
+      description: Mesmo formato de `/data/settings.json` (contracts/snapshots.md).
+      x-rate-limit: public-read
+      responses:
+        '200':
+          description: Só as chaves com is_public = 1
+          headers:
+            Cache-Control: { schema: { type: string, example: 'public, max-age=60' } }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/PublicSettings' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /api/public/ministries:
+    get:
+      tags: [Público]
+      summary: Ministérios, grupos e células ativos (sem paginação)
+      description: Nunca inclui private_address nem contact_email (BR-048).
+      x-rate-limit: public-read
+      parameters:
+        - name: category
+          in: query
+          schema: { $ref: '#/components/schemas/MinistryCategory' }
+        - name: neighborhood
+          in: query
+          description: Só para CELULA
+          schema: { type: string, maxLength: 80 }
+      responses:
+        '200':
+          description: Lista ordenada por display_order e name
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/MinistryPublic' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /api/public/bulletins:
+    get:
+      tags: [Público]
+      summary: Boletins publicados (12 por página, reference_date decrescente)
+      x-rate-limit: public-read
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - name: year
+          in: query
+          schema: { type: integer, minimum: 1985, maximum: 2100 }
+        - name: month
+          in: query
+          description: Exige year
+          schema: { type: integer, minimum: 1, maximum: 12 }
+      responses:
+        '200':
+          description: Página de boletins
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/BulletinPublic' }
+                  meta: { $ref: '#/components/schemas/PageMeta' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /api/public/palavra-viva:
+    get:
+      tags: [Público]
+      summary: Mensagens publicadas (10 por página, published_at decrescente)
+      x-rate-limit: public-read
+      parameters:
+        - $ref: '#/components/parameters/Page'
+      responses:
+        '200':
+          description: Página de mensagens (excerpt em vez de body)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/PalavraVivaSummary' }
+                  meta: { $ref: '#/components/schemas/PageMeta' }
+
+  /api/public/palavra-viva/{slug}:
+    get:
+      tags: [Público]
+      summary: Mensagem publicada
+      x-rate-limit: public-read
+      parameters:
+        - $ref: '#/components/parameters/Slug'
+      responses:
+        '200':
+          description: Mensagem
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/PalavraVivaDetail' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/public/events:
+    get:
+      tags: [Público]
+      summary: Eventos publicados (R2; 404 com FEATURE_EVENTS desligado)
+      x-rate-limit: public-read
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - name: include_past
+          in: query
+          schema: { type: boolean, default: false }
+      responses:
+        '200':
+          description: 12 por página; próximos por starts_at crescente, passados decrescente
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/EventSummary' }
+                  meta: { $ref: '#/components/schemas/PageMeta' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/public/events/{slug}:
+    get:
+      tags: [Público]
+      summary: Evento publicado com formulário de inscrição (R2)
+      x-rate-limit: public-read
+      parameters:
+        - $ref: '#/components/parameters/Slug'
+      responses:
+        '200':
+          description: Evento
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/EventPublicDetail' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/public/events/{slug}/register:
+    post:
+      tags: [Público]
+      summary: Inscrição em evento (R2) — BR-001, BR-002, BR-020 a BR-024
+      description: |
+        Bloqueio da linha do evento (`SELECT … FOR UPDATE`) + constraint única garantem
+        vagas e não duplicidade sob concorrência. Honeypot `website` preenchido → 201 genérico sem gravar.
+      x-rate-limit: registration-submit
+      security:
+        - xsrf: []
+      parameters:
+        - $ref: '#/components/parameters/Slug'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RegistrationInput' }
+      responses:
+        '201':
+          description: Inscrição aceita
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/RegistrationReceipt' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: REGISTRATION_CLOSED (BR-020) · EVENT_FULL (BR-021) · DUPLICATE_REGISTRATION (BR-022)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '419': { $ref: '#/components/responses/CsrfMismatch' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /api/public/leads:
+    post:
+      tags: [Público]
+      summary: Envio de contato (5 tipos) — BR-001 a BR-006
+      description: |
+        Grava o contato com status NOVO e enfileira, na mesma transação, uma notificação por
+        destinatário do tipo (ORACAO sem o texto). Não devolve o id (evita enumeração).
+        Honeypot `website` preenchido → 201 sem gravar (BR-002).
+      x-rate-limit: lead-submit
+      security:
+        - xsrf: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LeadInput' }
+      responses:
+        '201':
+          description: Recebido
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [received]
+                    properties:
+                      received: { type: boolean, const: true }
+        '419': { $ref: '#/components/responses/CsrfMismatch' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  # ───────────────────────────── Autenticação ─────────────────────────────
+  /api/auth/login:
+    post:
+      tags: [Autenticação]
+      summary: Login (BR-070, BR-071)
+      x-rate-limit: login
+      security:
+        - xsrf: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email, maxLength: 254 }
+                password: { type: string, maxLength: 200 }
+      responses:
+        '200':
+          description: Sessão criada e regenerada
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/Me' }
+        '422':
+          description: INVALID_CREDENTIALS — "E-mail ou senha inválidos." (mesma mensagem para todos os casos)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /api/auth/logout:
+    post:
+      tags: [Autenticação]
+      summary: Encerra a sessão no servidor
+      security:
+        - sessionCookie: []
+          xsrf: []
+      responses:
+        '204': { description: Sessão invalidada }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+
+  /api/auth/me:
+    get:
+      tags: [Autenticação]
+      summary: Usuário atual e permissões efetivas (BR-074)
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Usuário
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/Me' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+
+  /api/auth/forgot-password:
+    post:
+      tags: [Autenticação]
+      summary: Pede o link de redefinição (resposta sempre igual)
+      x-rate-limit: password-forgot
+      security:
+        - xsrf: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email, maxLength: 254 }
+      responses:
+        '200':
+          description: Sempre 200
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                        const: Se o e-mail estiver cadastrado, você receberá um link para criar uma nova senha.
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /api/auth/reset-password:
+    post:
+      tags: [Autenticação]
+      summary: Define nova senha (BR-072, BR-073); invalida todas as sessões
+      x-rate-limit: password-reset
+      security:
+        - xsrf: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, token, password, password_confirmation]
+              properties:
+                email: { type: string, format: email }
+                token: { type: string }
+                password: { type: string, minLength: 12, description: 'Até 72 bytes; fora da base de senhas vazadas' }
+                password_confirmation: { type: string }
+      responses:
+        '200': { description: Senha trocada; aviso "Sua senha foi alterada" enfileirado }
+        '422':
+          description: INVALID_RESET_TOKEN (BR-072) ou política de senha (BR-073)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  # ───────────────────────────── Painel — usuários ─────────────────────────────
+  /api/admin/users:
+    get:
+      tags: [Painel — usuários]
+      summary: Diretório somente leitura (users.read)
+      x-permission: users.read
+      x-rate-limit: admin
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: is_active
+          in: query
+          schema: { type: boolean }
+        - name: ministry_id
+          in: query
+          schema: { type: integer }
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PerPage'
+        - name: sort
+          in: query
+          schema: { type: string, enum: [name, -name], default: name }
+      responses:
+        '200':
+          description: Usuários
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/UserDirectoryItem' }
+                  meta: { $ref: '#/components/schemas/PageMeta' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  # ───────────────────────────── Painel — contatos ─────────────────────────────
+  /api/admin/leads:
+    get:
+      tags: [Painel — contatos]
+      summary: Caixa geral ou de oração (BR-007, BR-010, BR-012)
+      x-permission: 'leads.read (inbox=geral) | leads.oracao.read (inbox=oracao)'
+      x-rate-limit: admin
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: inbox
+          in: query
+          required: true
+          schema: { type: string, enum: [geral, oracao] }
+        - name: type
+          in: query
+          description: Só em inbox=geral
+          schema: { type: string, enum: [VISITANTE, MEMBRO, CONTATO, MINISTERIO] }
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/LeadStatus' }
+        - name: assigned_to
+          in: query
+          description: Id do usuário ou "me"
+          schema: { type: string }
+        - name: from
+          in: query
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          schema: { type: string, format: date }
+        - name: q
+          in: query
+          description: Nome ou telefone (≥ 2 caracteres; campos cifrados não são pesquisáveis)
+          schema: { type: string, minLength: 2 }
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PerPage'
+        - name: sort
+          in: query
+          schema: { type: string, enum: [created_at, -created_at], default: -created_at }
+      responses:
+        '200':
+          description: Contatos (sem message na lista)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/LeadListItem' }
+                  meta: { $ref: '#/components/schemas/PageMeta' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /api/admin/leads/assignees:
+    get:
+      tags: [Painel — contatos]
+      summary: Usuários ativos com permissão de gestão do tipo
+      x-permission: 'leads.manage | leads.oracao.manage (conforme o tipo)'
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: type
+          in: query
+          required: true
+          schema: { $ref: '#/components/schemas/LeadType' }
+      responses:
+        '200':
+          description: Responsáveis possíveis
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/UserRef' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /api/admin/leads/{id}:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      tags: [Painel — contatos]
+      summary: Contato com histórico (404 sem a permissão do tipo — BR-007)
+      x-permission: 'leads.read | leads.oracao.read (conforme o tipo)'
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Contato
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/LeadDetail' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [Painel — contatos]
+      summary: Status, responsável e/ou anotação (BR-008, BR-009, BR-013)
+      x-permission: 'leads.manage | leads.oracao.manage (conforme o tipo)'
+      security:
+        - sessionCookie: []
+          xsrf: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LeadPatch' }
+      responses:
+        '200':
+          description: Contato atualizado (grava LeadActivity)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/LeadDetail' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: INVALID_STATUS_TRANSITION (BR-008)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    delete:
+      tags: [Painel — contatos]
+      summary: Exclusão definitiva a pedido do titular (BR-081)
+      x-permission: 'leads.manage | leads.oracao.manage (conforme o tipo)'
+      security:
+        - sessionCookie: []
+          xsrf: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string, enum: [TITULAR_REQUEST] }
+      responses:
+        '204': { description: Excluído; auditoria lead.erased sem dados pessoais }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # ───────────────────────────── Painel — boletins ─────────────────────────────
+  /api/admin/bulletins:
+    get:
+      tags: [Painel — boletins]
+      summary: Boletins (inclui agendados)
+      x-permission: boletins.write
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PerPage'
+        - name: year
+          in: query
+          schema: { type: integer }
+        - name: status
+          in: query
+          schema: { type: string, enum: [AGENDADO, PUBLICADO] }
+        - name: sort
+          in: query
+          schema: { type: string, enum: [-reference_date, -edition_number], default: -reference_date }
+      responses:
+        '200':
+          description: Lista
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/BulletinAdmin' }
+                  meta: { $ref: '#/components/schemas/PageMeta' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [Painel — boletins]
+      summary: Cria boletim com PDF (BR-040, BR-041)
+      x-permission: boletins.write
+      security:
+        - sessionCookie: []
+          xsrf: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [edition_number, reference_date, title, pdf]
+              properties:
+                edition_number: { type: integer, minimum: 1 }
+                reference_date: { type: string, format: date }
+                title: { type: string, minLength: 3, maxLength: 150 }
+                summary_text: { type: string, maxLength: 5000 }
+                published_at: { type: string, format: date-time, description: 'Padrão: agora' }
+                pdf: { type: string, format: binary, description: 'PDF verdadeiro, até 10 MB' }
+      responses:
+        '201':
+          description: Criado (regenera snapshots)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/BulletinAdmin' }
+        '409':
+          description: DUPLICATE_EDITION
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /api/admin/bulletins/{id}:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    patch:
+      tags: [Painel — boletins]
+      summary: Altera metadados
+      x-permission: boletins.write
+      security:
+        - sessionCookie: []
+          xsrf: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                edition_number: { type: integer, minimum: 1 }
+                reference_date: { type: string, format: date }
+                title: { type: string, minLength: 3, maxLength: 150 }
+                summary_text: { type: [string, 'null'], maxLength: 5000 }
+                published_at: { type: string, format: date-time }
+      responses:
+        '200':
+          description: Atualizado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/BulletinAdmin' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: DUPLICATE_EDITION
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    delete:
+      tags: [Painel — boletins]
+      summary: Exclusão lógica (ADR-009)
+      x-permission: boletins.write
+      security:
+        - sessionCookie: []
+          xsrf: []
+      responses:
+        '204': { description: Excluído (recuperável pelo administrador técnico) }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/admin/bulletins/{id}/pdf:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    post:
+      tags: [Painel — boletins]
+      summary: Substitui o PDF (o anterior é apagado do disco)
+      x-permission: boletins.write
+      security:
+        - sessionCookie: []
+          xsrf: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [pdf]
+              properties:
+                pdf: { type: string, format: binary }
+      responses:
+        '200':
+          description: Substituído
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/BulletinAdmin' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  # ───────────────────────────── Painel — Palavra Viva ─────────────────────────────
+  /api/admin/palavra-viva:
+    get:
+      tags: [Painel — Palavra Viva]
+      summary: Mensagens (inclui agendadas)
+      x-permission: mensagens.write
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PerPage'
+      responses:
+        '200':
+          description: Lista
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/PalavraVivaAdmin' }
+                  meta: { $ref: '#/components/schemas/PageMeta' }
+    post:
+      tags: [Painel — Palavra Viva]
+      summary: Cria mensagem (BR-032, BR-044, BR-046)
+      x-permission: mensagens.write
+      security:
+        - sessionCookie: []
+          xsrf: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PalavraVivaInput' }
+      responses:
+        '201':
+          description: Criada (body já sanitizado)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PalavraVivaAdminEnvelope' }
+        '409':
+          description: DUPLICATE_SLUG
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /api/admin/palavra-viva/{id}:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      tags: [Painel — Palavra Viva]
+      summary: Mensagem
+      x-permission: mensagens.write
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Mensagem
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PalavraVivaAdminEnvelope' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [Painel — Palavra Viva]
+      summary: Altera mensagem
+      x-permission: mensagens.write
+      security:
+        - sessionCookie: []
+          xsrf: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PalavraVivaInput' }
+      responses:
+        '200':
+          description: Atualizada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PalavraVivaAdminEnvelope' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: DUPLICATE_SLUG
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    delete:
+      tags: [Painel — Palavra Viva]
+      summary: Exclusão lógica
+      x-permission: mensagens.write
+      security:
+        - sessionCookie: []
+          xsrf: []
+      responses:
+        '204': { description: Excluída }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # ───────────────────────────── Painel — eventos (R2) ─────────────────────────────
+  /api/admin/events:
+    get:
+      tags: [Painel — eventos (R2)]
+      summary: Eventos (escopo .own filtra pelo ministério — BR-030)
+      x-permission: 'eventos.write | eventos.write.own | eventos.inscricoes.read | eventos.inscricoes.read.own'
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PerPage'
+        - name: state
+          in: query
+          schema: { $ref: '#/components/schemas/EventState' }
+        - name: ministry_id
+          in: query
+          schema: { type: integer }
+        - name: sort
+          in: query
+          schema: { type: string, enum: [-starts_at, starts_at], default: -starts_at }
+      responses:
+        '200':
+          description: Lista com registrations_count
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/EventAdmin' }
+                  meta: { $ref: '#/components/schemas/PageMeta' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [Painel — eventos (R2)]
+      summary: Cria evento (BR-025, BR-026, BR-031, BR-032)
+      x-permission: 'eventos.write | eventos.write.own (ministry_id = o do usuário)'
+      security:
+        - sessionCookie: []
+          xsrf: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EventInput' }
+      responses:
+        '201':
+          description: Criado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EventAdminEnvelope' }
+        '409':
+          description: DUPLICATE_SLUG
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /api/admin/events/{id}:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      tags: [Painel — eventos (R2)]
+      summary: Evento (404 fora do escopo .own)
+      x-permission: 'eventos.write | eventos.write.own'
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Evento
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EventAdminEnvelope' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [Painel — eventos (R2)]
+      summary: Altera, publica, despublica ou encerra inscrições (registration_deadline = agora)
+      x-permission: 'eventos.write | eventos.write.own'
+      security:
+        - sessionCookie: []
+          xsrf: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EventInput' }
+      responses:
+        '200':
+          description: Atualizado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EventAdminEnvelope' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: SPOTS_BELOW_REGISTRATIONS (BR-027) · SCHEMA_CHANGE_NEEDS_CONFIRMATION (BR-029) · DUPLICATE_SLUG (BR-032)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    delete:
+      tags: [Painel — eventos (R2)]
+      summary: Exclusão definitiva só sem inscrições (BR-028)
+      x-permission: 'eventos.write | eventos.write.own'
+      security:
+        - sessionCookie: []
+          xsrf: []
+      responses:
+        '204': { description: Excluído }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: EVENT_HAS_REGISTRATIONS
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+
+  /api/admin/events/{id}/banner:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    post:
+      tags: [Painel — eventos (R2)]
+      summary: Envia banner (BR-045); gera WebP de 1600 px e 800 px sem EXIF
+      x-permission: 'eventos.write | eventos.write.own'
+      security:
+        - sessionCookie: []
+          xsrf: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [banner]
+              properties:
+                banner: { type: string, format: binary, description: 'JPEG, PNG ou WebP até 3 MB' }
+      responses:
+        '200':
+          description: Banner gravado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      banner_url: { type: string }
+                      banner_small_url: { type: string }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    delete:
+      tags: [Painel — eventos (R2)]
+      summary: Remove o banner
+      x-permission: 'eventos.write | eventos.write.own'
+      security:
+        - sessionCookie: []
+          xsrf: []
+      responses:
+        '204': { description: Removido }
+
+  /api/admin/events/{id}/registrations:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      tags: [Painel — eventos (R2)]
+      summary: Inscritos (até 500 por página para o PDF no navegador — ADR-015)
+      x-permission: 'eventos.inscricoes.read | eventos.inscricoes.read.own'
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - name: per_page
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 500, default: 25 }
+        - name: q
+          in: query
+          schema: { type: string, minLength: 2 }
+      responses:
+        '200':
+          description: Inscritos com contador de vagas
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/RegistrationAdmin' }
+                  meta:
+                    allOf:
+                      - $ref: '#/components/schemas/PageMeta'
+                      - type: object
+                        properties:
+                          spots_total: { type: [integer, 'null'] }
+                          spots_filled: { type: integer }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/admin/events/{id}/registrations/export.csv:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      tags: [Painel — eventos (R2)]
+      summary: CSV por streaming (UTF-8 com BOM, separador ;) — auditoria registrations.exported
+      x-permission: 'eventos.inscricoes.read | eventos.inscricoes.read.own'
+      x-rate-limit: admin-export
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Arquivo
+          headers:
+            Content-Disposition:
+              schema: { type: string, example: 'attachment; filename="inscritos-acampamento-20270130.csv"' }
+          content:
+            text/csv:
+              schema: { type: string }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /api/admin/events/{id}/registrations/{registrationId}:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+      - name: registrationId
+        in: path
+        required: true
+        schema: { type: integer }
+    delete:
+      tags: [Painel — eventos (R2)]
+      summary: Cancela (exclusão definitiva) e libera a vaga (BR-034, BR-081)
+      x-permission: 'eventos.write | eventos.write.own'
+      security:
+        - sessionCookie: []
+          xsrf: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string, enum: [CANCELLED, TITULAR_REQUEST] }
+      responses:
+        '204': { description: Excluída }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # ───────────────────────────── Painel — ministérios ─────────────────────────────
+  /api/admin/ministries:
+    get:
+      tags: [Painel — ministérios]
+      summary: Catálogo completo (inclui private_address e contact_email)
+      x-permission: ministerios.write
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: category
+          in: query
+          schema: { $ref: '#/components/schemas/MinistryCategory' }
+        - name: is_active
+          in: query
+          schema: { type: boolean }
+        - name: q
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Lista
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/MinistryAdmin' }
+    post:
+      tags: [Painel — ministérios]
+      summary: Cria item (BR-049)
+      x-permission: ministerios.write
+      security:
+        - sessionCookie: []
+          xsrf: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MinistryInput' }
+      responses:
+        '201':
+          description: Criado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/MinistryAdmin' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /api/admin/ministries/{id}:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    patch:
+      tags: [Painel — ministérios]
+      summary: Altera, ordena, ativa ou desativa
+      x-permission: ministerios.write
+      security:
+        - sessionCookie: []
+          xsrf: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MinistryInput' }
+      responses:
+        '200':
+          description: Atualizado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/MinistryAdmin' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    delete:
+      tags: [Painel — ministérios]
+      summary: Exclui só sem referências (BR-047)
+      x-permission: ministerios.write
+      security:
+        - sessionCookie: []
+          xsrf: []
+      responses:
+        '204': { description: Excluído }
+        '409':
+          description: ITEM_IN_USE
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+
+  # ───────────────────────────── Painel — configurações e PIX ─────────────────────────────
+  /api/admin/settings:
+    get:
+      tags: [Painel — configurações e PIX]
+      summary: Todas as chaves exceto pix, com avisos de tipo sem destinatário (BR-011)
+      x-permission: settings.write
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Configurações
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/AdminSettings' }
+                  warnings:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        code: { type: string, const: NO_RECIPIENTS }
+                        lead_type: { $ref: '#/components/schemas/LeadType' }
+                        message: { type: string, example: 'O tipo VISITANTE não tem destinatário de e-mail. Os contatos chegam só pelo painel.' }
+    patch:
+      tags: [Painel — configurações e PIX]
+      summary: Substitui as chaves enviadas (pix é rejeitada aqui) — BR-051
+      x-permission: settings.write
+      security:
+        - sessionCookie: []
+          xsrf: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminSettingsPatch'
+      responses:
+        '200':
+          description: Chaves atualizadas (regenera data/settings.json)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/AdminSettings' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /api/admin/settings/pix:
+    post:
+      tags: [Painel — configurações e PIX]
+      summary: Altera dados PIX com reconfirmação de senha (BR-060 a BR-063)
+      x-permission: pix.write
+      security:
+        - sessionCookie: []
+          xsrf: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [pix_key, beneficiary_name, current_password]
+              properties:
+                pix_key: { type: string, pattern: '^\d{14}$', description: 'CNPJ com dígitos verificadores válidos' }
+                beneficiary_name: { type: string, maxLength: 120 }
+                copy_paste_code: { type: string, maxLength: 512, description: 'EMV com CRC16 válido' }
+                qr_image: { type: string, format: binary, description: 'PNG ou JPEG até 1 MB' }
+                current_password: { type: string }
+      responses:
+        '200':
+          description: Dados novos; auditoria pix.updated com anterior e novo; alerta enfileirado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Pix' }
+        '409':
+          description: PIX_ALERT_NOT_CONFIGURED (BR-063)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '422':
+          description: PASSWORD_CONFIRMATION_FAILED (BR-060) ou validação (BR-061, BR-062, BR-045)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: pibls_session
+      description: Sessão Sanctum SPA (HttpOnly, Secure, SameSite=Strict); 60 min de inatividade, 12 h absolutas
+    xsrf:
+      type: apiKey
+      in: header
+      name: X-XSRF-TOKEN
+      description: Valor do cookie XSRF-TOKEN; obrigatório em toda escrita, inclusive pública
+
+  parameters:
+    Page:
+      name: page
+      in: query
+      schema: { type: integer, minimum: 1, default: 1 }
+    PerPage:
+      name: per_page
+      in: query
+      description: Painel; padrão 25, máximo 100. Fixo nas rotas públicas.
+      schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+    Id:
+      name: id
+      in: path
+      required: true
+      schema: { type: integer, minimum: 1 }
+    Slug:
+      name: slug
+      in: path
+      required: true
+      schema: { type: string, pattern: '^[a-z0-9]+(-[a-z0-9]+)*$', maxLength: 160 }
+
+  responses:
+    ValidationError:
+      description: VALIDATION_ERROR — "Confira os campos destacados." com details por campo
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    Unauthenticated:
+      description: UNAUTHENTICATED — "Sua sessão expirou. Entre novamente."
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    Forbidden:
+      description: FORBIDDEN — "Você não tem permissão para esta ação."
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    NotFound:
+      description: NOT_FOUND — inexistente, não publicado ou fora do escopo (não revela existência)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    CsrfMismatch:
+      description: CSRF_TOKEN_MISMATCH — a SPA renova o cookie e repete uma vez
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    PayloadTooLarge:
+      description: PAYLOAD_TOO_LARGE — "O arquivo é grande demais."
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    TooManyRequests:
+      description: TOO_MANY_REQUESTS — "Muitas tentativas. Tente novamente em alguns minutos."
+      headers:
+        Retry-After: { schema: { type: integer } }
+        X-RateLimit-Limit: { schema: { type: integer } }
+        X-RateLimit-Remaining: { schema: { type: integer } }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+
+  schemas:
+    # ── Envelopes ──
+    ErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, traceId]
+          properties:
+            code:
+              type: string
+              enum:
+                - VALIDATION_ERROR
+                - UNAUTHENTICATED
+                - INVALID_CREDENTIALS
+                - INVALID_RESET_TOKEN
+                - FORBIDDEN
+                - NOT_FOUND
+                - CSRF_TOKEN_MISMATCH
+                - PAYLOAD_TOO_LARGE
+                - TOO_MANY_REQUESTS
+                - INTERNAL_ERROR
+                - SERVICE_UNAVAILABLE
+                - REGISTRATION_CLOSED
+                - EVENT_FULL
+                - DUPLICATE_REGISTRATION
+                - INVALID_STATUS_TRANSITION
+                - SPOTS_BELOW_REGISTRATIONS
+                - EVENT_HAS_REGISTRATIONS
+                - SCHEMA_CHANGE_NEEDS_CONFIRMATION
+                - ITEM_IN_USE
+                - DUPLICATE_EDITION
+                - DUPLICATE_SLUG
+                - PIX_ALERT_NOT_CONFIGURED
+                - PASSWORD_CONFIRMATION_FAILED
+            message: { type: string, description: Mensagem pt-BR da BR correspondente }
+            details:
+              type: array
+              items:
+                type: object
+                required: [field, code, message]
+                properties:
+                  field: { type: string }
+                  code: { type: string }
+                  message: { type: string }
+            traceId: { type: string, description: ULID da requisição (X-Request-Id) }
+    PageMeta:
+      type: object
+      required: [page, per_page, total, last_page]
+      properties:
+        page: { type: integer }
+        per_page: { type: integer }
+        total: { type: integer }
+        last_page: { type: integer }
+
+    # ── Enums ──
+    LeadType:
+      type: string
+      enum: [VISITANTE, MEMBRO, ORACAO, CONTATO, MINISTERIO]
+    LeadStatus:
+      type: string
+      enum: [NOVO, EM_ATENDIMENTO, CONCLUIDO]
+    MinistryCategory:
+      type: string
+      enum: [MINISTERIO, GRUPO, CELULA]
+    EventState:
+      type: string
+      enum: [RASCUNHO, INSCRICOES_ABERTAS, INSCRICOES_ENCERRADAS, REALIZADO]
+    FormFieldType:
+      type: string
+      enum: [TEXT, TEXTAREA, NUMBER, DATE, SELECT, MULTISELECT, BOOLEAN]
+    PermissionKey:
+      type: string
+      enum:
+        - boletins.write
+        - mensagens.write
+        - eventos.write
+        - eventos.write.own
+        - eventos.inscricoes.read
+        - eventos.inscricoes.read.own
+        - leads.read
+        - leads.manage
+        - leads.oracao.read
+        - leads.oracao.manage
+        - ministerios.write
+        - settings.write
+        - pix.write
+        - users.read
+    RoleCode:
+      type: string
+      enum: [COMUNICACAO, SECRETARIA, TESOURARIA, ORACAO, PASTORAL, LIDER_MINISTERIO, ADMIN_TECNICO]
+
+    # ── Configurações ──
+    ScheduleItem:
+      type: object
+      required: [day, activity, time]
+      properties:
+        day: { type: string, example: Domingo }
+        recurrence: { type: string, example: semanal }
+        activity: { type: string, example: Culto Matinal }
+        time: { type: string, pattern: '^([01]\d|2[0-3]):[0-5]\d$', example: '10:10' }
+        mode: { type: string, example: Presencial e YouTube }
+    PostalAddress:
+      type: object
+      properties:
+        street: { type: string }
+        number: { type: string }
+        complement: { type: [string, 'null'] }
+        neighborhood: { type: string }
+        city: { type: string }
+        state: { type: string, minLength: 2, maxLength: 2 }
+        zip: { type: string, pattern: '^\d{8}$' }
+    Notice:
+      type: object
+      required: [active, text]
+      properties:
+        active: { type: boolean }
+        title: { type: string, maxLength: 80 }
+        text: { type: string, maxLength: 500 }
+    Pix:
+      type: object
+      required: [pix_key, beneficiary_name]
+      properties:
+        pix_key: { type: string, pattern: '^\d{14}$' }
+        beneficiary_name: { type: string }
+        qr_image_url: { type: [string, 'null'] }
+        copy_paste_code: { type: [string, 'null'] }
+    PublicSettings:
+      type: object
+      properties:
+        schedule:
+          type: array
+          maxItems: 20
+          items: { $ref: '#/components/schemas/ScheduleItem' }
+        campaign_notice: { $ref: '#/components/schemas/Notice' }
+        lords_supper_notice:
+          type: object
+          description: Manual, sem cálculo de data (Clarificação 2)
+          properties:
+            active: { type: boolean }
+            text: { type: string, maxLength: 300 }
+        address: { $ref: '#/components/schemas/PostalAddress' }
+        map_links:
+          type: object
+          properties:
+            google_maps_url: { type: string, format: uri }
+            waze_url: { type: string, format: uri }
+            embed_url: { type: string, format: uri }
+        whatsapp:
+          type: object
+          properties:
+            phone: { type: string, example: '+5531999998888' }
+            default_text: { type: string }
+        youtube_links:
+          type: object
+          properties:
+            channel_url: { type: string, format: uri }
+            live_url: { type: string, format: uri }
+        social_links:
+          type: array
+          items:
+            type: object
+            properties:
+              network: { type: string }
+              url: { type: string, format: uri }
+        pix: { $ref: '#/components/schemas/Pix' }
+        features:
+          type: object
+          description: Feature flags do .env (DevOps → Feature flags)
+          properties:
+            events: { type: boolean, description: FEATURE_EVENTS (R2) }
+    AdminSettings:
+      allOf:
+        - $ref: '#/components/schemas/PublicSettings'
+        - type: object
+          properties:
+            notification_recipients: { $ref: '#/components/schemas/NotificationRecipients' }
+    AdminSettingsPatch:
+      type: object
+      description: Só as chaves enviadas são substituídas, cada uma com o valor completo. A chave pix é recusada.
+      properties:
+        schedule:
+          type: array
+          maxItems: 20
+          items: { $ref: '#/components/schemas/ScheduleItem' }
+        campaign_notice: { $ref: '#/components/schemas/Notice' }
+        lords_supper_notice:
+          type: object
+          properties:
+            active: { type: boolean }
+            text: { type: string, maxLength: 300 }
+        address: { $ref: '#/components/schemas/PostalAddress' }
+        map_links: { type: object }
+        whatsapp: { type: object }
+        youtube_links: { type: object }
+        social_links: { type: array, items: { type: object } }
+        notification_recipients: { $ref: '#/components/schemas/NotificationRecipients' }
+      additionalProperties: false
+    NotificationRecipients:
+      type: object
+      description: Até 10 e-mails válidos por tipo (BR-051). Nunca público.
+      properties:
+        VISITANTE: { $ref: '#/components/schemas/EmailList' }
+        MEMBRO: { $ref: '#/components/schemas/EmailList' }
+        ORACAO: { $ref: '#/components/schemas/EmailList' }
+        CONTATO: { $ref: '#/components/schemas/EmailList' }
+        MINISTERIO: { $ref: '#/components/schemas/EmailList' }
+    EmailList:
+      type: array
+      maxItems: 10
+      items: { type: string, format: email }
+
+    # ── Ministérios ──
+    MinistryPublic:
+      type: object
+      required: [id, category, name]
+      properties:
+        id: { type: integer }
+        category: { $ref: '#/components/schemas/MinistryCategory' }
+        name: { type: string }
+        description: { type: [string, 'null'], description: HTML sanitizado }
+        leaders_text: { type: [string, 'null'] }
+        schedule_text: { type: [string, 'null'] }
+        neighborhood: { type: [string, 'null'] }
+        contact_phone: { type: [string, 'null'] }
+    MinistryAdmin:
+      allOf:
+        - $ref: '#/components/schemas/MinistryPublic'
+        - type: object
+          properties:
+            private_address: { type: [string, 'null'], description: Só no painel (BR-048) }
+            contact_email: { type: [string, 'null'], format: email }
+            display_order: { type: integer }
+            is_active: { type: boolean }
+            updated_at: { type: string, format: date-time }
+            updated_by: { $ref: '#/components/schemas/UserRef' }
+    MinistryInput:
+      type: object
+      required: [category, name]
+      properties:
+        category: { $ref: '#/components/schemas/MinistryCategory' }
+        name: { type: string, maxLength: 120 }
+        description: { type: [string, 'null'], maxLength: 5000 }
+        leaders_text: { type: [string, 'null'], maxLength: 500 }
+        schedule_text: { type: [string, 'null'], maxLength: 120, description: 'Obrigatório para GRUPO e CELULA (BR-049)' }
+        neighborhood: { type: [string, 'null'], maxLength: 80, description: 'Obrigatório para CELULA (BR-049)' }
+        private_address: { type: [string, 'null'] }
+        contact_phone: { type: [string, 'null'] }
+        contact_email: { type: [string, 'null'], format: email }
+        display_order: { type: integer, minimum: 0 }
+        is_active: { type: boolean }
+
+    # ── Boletins ──
+    BulletinPublic:
+      type: object
+      required: [id, edition_number, reference_date, title, pdf_url, pdf_size_bytes]
+      properties:
+        id: { type: integer }
+        edition_number: { type: integer }
+        reference_date: { type: string, format: date }
+        title: { type: string }
+        summary_text: { type: [string, 'null'] }
+        pdf_url: { type: string, example: '/uploads/boletins/2026/3f9c…e1.pdf' }
+        pdf_size_bytes: { type: integer }
+    BulletinAdmin:
+      allOf:
+        - $ref: '#/components/schemas/BulletinPublic'
+        - type: object
+          properties:
+            published_at: { type: string, format: date-time }
+            status: { type: string, enum: [AGENDADO, PUBLICADO] }
+            updated_at: { type: string, format: date-time }
+            updated_by: { $ref: '#/components/schemas/UserRef' }
+
+    # ── Palavra Viva ──
+    PalavraVivaSummary:
+      type: object
+      required: [id, title, slug, excerpt, published_at]
+      properties:
+        id: { type: integer }
+        title: { type: string }
+        slug: { type: string }
+        excerpt: { type: string, maxLength: 300 }
+        author_display: { type: [string, 'null'] }
+        youtube_video_id: { type: [string, 'null'] }
+        published_at: { type: string, format: date-time }
+    PalavraVivaDetail:
+      allOf:
+        - $ref: '#/components/schemas/PalavraVivaSummary'
+        - type: object
+          required: [body]
+          properties:
+            body: { type: string, description: HTML sanitizado (SanitizedHtml) }
+    PalavraVivaAdmin:
+      allOf:
+        - $ref: '#/components/schemas/PalavraVivaDetail'
+        - type: object
+          properties:
+            youtube_url: { type: [string, 'null'] }
+            status: { type: string, enum: [AGENDADO, PUBLICADO] }
+            updated_at: { type: string, format: date-time }
+            updated_by: { $ref: '#/components/schemas/UserRef' }
+    PalavraVivaAdminEnvelope:
+      type: object
+      properties:
+        data: { $ref: '#/components/schemas/PalavraVivaAdmin' }
+        sanitization_warning: { type: boolean, description: 'true se parte da formatação foi removida (BR-046)' }
+    PalavraVivaInput:
+      type: object
+      required: [title, slug, body]
+      properties:
+        title: { type: string, minLength: 3, maxLength: 150 }
+        slug: { type: string, pattern: '^[a-z0-9]+(-[a-z0-9]+)*$', maxLength: 160 }
+        body: { type: string, maxLength: 50000 }
+        author_display: { type: [string, 'null'], maxLength: 120 }
+        youtube_url: { type: [string, 'null'], description: 'Só YouTube (BR-044)' }
+        published_at: { type: string, format: date-time }
+
+    # ── Eventos (R2) ──
+    FormField:
+      type: object
+      required: [key, label, type, required]
+      properties:
+        key: { type: string, pattern: '^[a-z][a-z0-9_]{0,39}$' }
+        label: { type: string, maxLength: 150 }
+        type: { $ref: '#/components/schemas/FormFieldType' }
+        required: { type: boolean }
+        help_text: { type: [string, 'null'], maxLength: 300 }
+        sensitive:
+          type: boolean
+          default: false
+          description: 'Campo que pede dado de saúde. Com algum campo marcado, a inscrição exige health_consent (BR-083, ADR-020)'
+        min: { type: [number, 'null'] }
+        max: { type: [number, 'null'] }
+        options:
+          type: [array, 'null']
+          minItems: 2
+          maxItems: 30
+          uniqueItems: true
+          items: { type: string }
+    EventRegistrationInfo:
+      type: object
+      required: [state, spots_total, spots_left]
+      properties:
+        state: { $ref: '#/components/schemas/EventState' }
+        deadline: { type: [string, 'null'], format: date-time }
+        spots_total: { type: [integer, 'null'] }
+        spots_left: { type: [integer, 'null'], description: null = ilimitado }
+    EventSummary:
+      type: object
+      required: [id, slug, title, starts_at, location]
+      properties:
+        id: { type: integer }
+        slug: { type: string }
+        title: { type: string }
+        excerpt: { type: string }
+        ministry: { $ref: '#/components/schemas/MinistryRef' }
+        starts_at: { type: string, format: date-time }
+        ends_at: { type: [string, 'null'], format: date-time }
+        location: { type: string }
+        banner_small_url: { type: [string, 'null'] }
+        registration: { $ref: '#/components/schemas/EventRegistrationInfo' }
+    EventPublicDetail:
+      allOf:
+        - $ref: '#/components/schemas/EventSummary'
+        - type: object
+          properties:
+            description: { type: string, description: HTML sanitizado }
+            banner_url: { type: [string, 'null'] }
+            has_minors: { type: boolean }
+            form_schema:
+              type: array
+              maxItems: 30
+              items: { $ref: '#/components/schemas/FormField' }
+    EventAdmin:
+      allOf:
+        - $ref: '#/components/schemas/EventPublicDetail'
+        - type: object
+          properties:
+            is_published: { type: boolean }
+            max_spots: { type: [integer, 'null'] }
+            registration_deadline: { type: [string, 'null'], format: date-time }
+            registrations_count: { type: integer }
+            updated_at: { type: string, format: date-time }
+            updated_by: { $ref: '#/components/schemas/UserRef' }
+    EventAdminEnvelope:
+      type: object
+      properties:
+        data: { $ref: '#/components/schemas/EventAdmin' }
+        sanitization_warning: { type: boolean, description: 'true se parte da formatação da descrição foi removida (BR-046)' }
+    EventInput:
+      type: object
+      properties:
+        title: { type: string, maxLength: 150 }
+        slug: { type: string, pattern: '^[a-z0-9]+(-[a-z0-9]+)*$', maxLength: 160 }
+        ministry_id: { type: integer }
+        description: { type: string, maxLength: 20000 }
+        starts_at: { type: string, format: date-time }
+        ends_at: { type: [string, 'null'], format: date-time, description: '>= starts_at (BR-025)' }
+        location: { type: string, maxLength: 200 }
+        max_spots: { type: [integer, 'null'], minimum: 1 }
+        registration_deadline: { type: [string, 'null'], format: date-time, description: '<= starts_at (BR-026)' }
+        has_minors: { type: boolean }
+        is_published: { type: boolean, description: 'Publicar com prazo vencido: a SPA pede a confirmação da BR-033 (WARNING) antes de enviar' }
+        form_schema:
+          type: array
+          maxItems: 30
+          items: { $ref: '#/components/schemas/FormField' }
+        confirm_schema_change: { type: boolean, description: 'Confirma remoção ou troca de tipo com inscrições (BR-029)' }
+    RegistrationInput:
+      type: object
+      required: [participant_name, phone, answers, consent]
+      properties:
+        participant_name: { type: string, minLength: 2, maxLength: 120 }
+        phone: { type: string, description: 'Brasileiro com DDD; aceita máscara' }
+        email: { type: [string, 'null'], format: email }
+        guardian_name: { type: [string, 'null'], description: 'Obrigatório se has_minors (BR-023)' }
+        guardian_phone: { type: [string, 'null'] }
+        guardian_consent: { type: [boolean, 'null'] }
+        answers:
+          type: object
+          description: Chave = FormField.key; validado contra o form_schema vigente (BR-024)
+          additionalProperties: true
+        consent: { type: boolean, const: true }
+        health_consent:
+          type: [boolean, 'null']
+          description: 'Obrigatório (true) quando o form_schema tem campo sensitive (BR-083); ignorado caso contrário'
+        website: { type: string, maxLength: 0, description: Honeypot (deve vir vazio) }
+    RegistrationReceipt:
+      type: object
+      properties:
+        id: { type: integer }
+        event_title: { type: string }
+        participant_name: { type: string }
+        starts_at: { type: string, format: date-time }
+        confirmation_email_queued: { type: boolean }
+    RegistrationAdmin:
+      type: object
+      properties:
+        id: { type: integer }
+        created_at: { type: string, format: date-time }
+        participant_name: { type: string }
+        phone: { type: string }
+        email: { type: [string, 'null'] }
+        guardian_name: { type: [string, 'null'] }
+        guardian_phone: { type: [string, 'null'] }
+        answers:
+          type: array
+          items:
+            type: object
+            properties:
+              key: { type: string }
+              label: { type: string, description: Rótulo da época da inscrição }
+              type: { $ref: '#/components/schemas/FormFieldType' }
+              value: {}
+
+    # ── Contatos ──
+    LeadInput:
+      type: object
+      description: |
+        Campos obrigatórios por tipo (BR-004, BR-005, BR-006):
+        VISITANTE: name, phone, neighborhood, wants_visit, wants_cell_group ·
+        MEMBRO: name, phone, from_other_baptist_church ·
+        ORACAO: message (5–4.000) ·
+        CONTATO: name, message (5–2.000), phone ou email ·
+        MINISTERIO: name, ministry_id, message (5–2.000), phone ou email.
+      required: [type, consent]
+      properties:
+        type: { $ref: '#/components/schemas/LeadType' }
+        name: { type: [string, 'null'], minLength: 2, maxLength: 120 }
+        phone: { type: [string, 'null'] }
+        email: { type: [string, 'null'], format: email, maxLength: 254 }
+        neighborhood: { type: [string, 'null'], maxLength: 80 }
+        wants_visit: { type: [boolean, 'null'] }
+        wants_cell_group: { type: [boolean, 'null'] }
+        group_id: { type: [integer, 'null'] }
+        from_other_baptist_church: { type: [boolean, 'null'] }
+        ministry_id: { type: [integer, 'null'] }
+        message: { type: [string, 'null'], maxLength: 4000 }
+        consent: { type: boolean, const: true }
+        website: { type: string, maxLength: 0, description: Honeypot }
+    LeadListItem:
+      type: object
+      properties:
+        id: { type: integer }
+        type: { $ref: '#/components/schemas/LeadType' }
+        status: { $ref: '#/components/schemas/LeadStatus' }
+        name: { type: [string, 'null'], description: null → "Anônimo" }
+        phone: { type: [string, 'null'] }
+        created_at: { type: string, format: date-time }
+        waiting_days: { type: [integer, 'null'], description: 'Preenchido em NOVO há mais de 3 dias (BR-010)' }
+        assigned_to:
+          oneOf:
+            - $ref: '#/components/schemas/UserRefWithStatus'
+            - type: 'null'
+    LeadActivity:
+      type: object
+      properties:
+        id: { type: integer }
+        actor: { $ref: '#/components/schemas/UserRef' }
+        from_status:
+          oneOf:
+            - $ref: '#/components/schemas/LeadStatus'
+            - type: 'null'
+        to_status:
+          oneOf:
+            - $ref: '#/components/schemas/LeadStatus'
+            - type: 'null'
+        assigned_to: { type: [integer, 'null'] }
+        note: { type: [string, 'null'], maxLength: 1000 }
+        created_at: { type: string, format: date-time }
+    LeadDetail:
+      allOf:
+        - $ref: '#/components/schemas/LeadListItem'
+        - type: object
+          properties:
+            email: { type: [string, 'null'] }
+            neighborhood: { type: [string, 'null'] }
+            wants_visit: { type: [boolean, 'null'] }
+            wants_cell_group: { type: [boolean, 'null'] }
+            group: { $ref: '#/components/schemas/MinistryRef' }
+            from_other_baptist_church: { type: [boolean, 'null'] }
+            ministry: { $ref: '#/components/schemas/MinistryRef' }
+            message: { type: [string, 'null'], description: Decifrado }
+            consent_at: { type: string, format: date-time }
+            consent_version: { type: string }
+            whatsapp_url: { type: [string, 'null'], example: 'https://wa.me/5531999998888' }
+            activities:
+              type: array
+              items: { $ref: '#/components/schemas/LeadActivity' }
+    LeadPatch:
+      type: object
+      minProperties: 1
+      properties:
+        status: { $ref: '#/components/schemas/LeadStatus' }
+        assigned_to: { type: [integer, 'null'] }
+        note: { type: string, maxLength: 1000 }
+
+    # ── Usuários ──
+    UserRef:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+    UserRefWithStatus:
+      allOf:
+        - $ref: '#/components/schemas/UserRef'
+        - type: object
+          properties:
+            is_active: { type: boolean, description: false → "(inativo)" (BR-012) }
+    MinistryRef:
+      oneOf:
+        - type: object
+          properties:
+            id: { type: integer }
+            name: { type: string }
+        - type: 'null'
+    Me:
+      type: object
+      required: [id, name, email, roles, permissions]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        email: { type: string, format: email }
+        ministry: { $ref: '#/components/schemas/MinistryRef' }
+        roles:
+          type: array
+          items: { $ref: '#/components/schemas/RoleCode' }
+        permissions:
+          type: array
+          description: Só para montar a interface; o servidor revalida em toda rota (BR-076)
+          items: { $ref: '#/components/schemas/PermissionKey' }
+    UserDirectoryItem:
+      allOf:
+        - $ref: '#/components/schemas/Me'
+        - type: object
+          properties:
+            is_active: { type: boolean }

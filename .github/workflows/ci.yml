@@ -1,0 +1,285 @@
+name: CI
+
+# Disparo e jobs: architecture.md → DevOps → Pipeline de CI.
+# As Actions ficam fixadas por SHA de commit (o tag vai no comentário). Para atualizar,
+# o Dependabot abre o PR (T009); confira o SHA no repositório da Action antes de aceitar.
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: Frontend (tsc, ESLint, Prettier, Vitest)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            frontend/package-lock.json
+            e2e/package-lock.json
+
+      - name: Instalar dependências
+        working-directory: frontend
+        run: npm ci
+
+      # docs/openapi.json é a fonte; o backend o confere no job dele. Aqui só garante que o gerado foi commitado.
+      - name: Tipos da API em dia com docs/openapi.json
+        working-directory: frontend
+        run: npm run api:types:check
+
+      - name: Tipos (react-router typegen + tsc)
+        working-directory: frontend
+        run: npm run typecheck
+
+      - name: ESLint
+        working-directory: frontend
+        run: npm run lint
+
+      - name: Prettier
+        working-directory: frontend
+        run: npm run format:check
+
+      - name: Vitest com cobertura (falha abaixo de 70% de linhas em features/ e shared/)
+        working-directory: frontend
+        run: npm run test -- --coverage
+
+      - name: Build
+        working-directory: frontend
+        run: npm run build
+
+      # RNF-05 e ADR-023: JS inicial de cada rota pública ≤ 160 KB gzip (sem o painel) e CSS ≤ 40 KB gzip
+      - name: Orçamento de bundle
+        working-directory: frontend
+        run: npm run bundle:check
+
+      - name: Tipos do e2e
+        working-directory: e2e
+        run: |
+          npm ci
+          npm run typecheck
+
+  a11y-perf:
+    name: Acessibilidade e desempenho (build servido, axe, Lighthouse)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            frontend/package-lock.json
+            e2e/package-lock.json
+
+      # O build leva como snapshot de fallback (FR-011) os mesmos dados fictícios que o servidor de teste serve em /data
+      - name: Build do frontend
+        working-directory: frontend
+        env:
+          BUILD_SNAPSHOTS_FROM: ../e2e/fixtures/data
+        run: |
+          npm ci
+          npm run build
+
+      - name: Playwright e Chromium
+        working-directory: e2e
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      # O build é servido por um servidor Node que imita as regras do .htaccess (raiz, arquivo, <rota>.html, fallback da
+      # SPA), com dados fictícios em /data/*. O .htaccess de verdade é testado no Apache pelos testes do deploy.
+      - name: Servir o build com o .htaccess emulado
+        working-directory: frontend
+        env:
+          FIXTURES_DIR: ../e2e/fixtures/data
+          PORT: "4173"
+        run: |
+          nohup node scripts/serve-build.mjs > "$RUNNER_TEMP/serve.log" 2>&1 &
+          for _ in $(seq 1 30); do
+            if curl -fsS http://localhost:4173/ > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat "$RUNNER_TEMP/serve.log"
+          exit 1
+
+      - name: Playwright + axe (bloqueante)
+        working-directory: e2e
+        env:
+          E2E_BASE_URL: http://localhost:4173
+          E2E_BUILD_SNAPSHOTS: "1"
+        run: npx playwright test specs/a11y.spec.ts specs/public-pages.spec.ts --project=publico-360
+
+      # Só aviso: os limites estão em frontend/lighthouserc.json (assertions em "warn")
+      - name: Lighthouse CI (aviso)
+        continue-on-error: true
+        working-directory: frontend
+        run: npx --yes @lhci/cli@0.15.1 autorun
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: a11y-perf-relatorios
+          path: |
+            e2e/playwright-report
+            e2e/test-results
+            frontend/.lighthouseci
+          if-no-files-found: ignore
+          retention-days: 7
+
+  backend:
+    name: Backend (PHP 8.4 sem OPcache, MySQL ${{ matrix.mysql }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        mysql: ["5.7", "8.0"]
+    services:
+      mysql:
+        image: mysql:${{ matrix.mysql }}
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: pibls_test
+          MYSQL_USER: pibls_app
+          MYSQL_PASSWORD: secret
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot --silent"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+    env:
+      # Sobrepõe o DB_HOST=mysql do phpunit.xml (que vale para o Docker Compose local)
+      DB_HOST: 127.0.0.1
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2 (tag móvel; este é o commit atual)
+        with:
+          php-version: "8.4"
+          extensions: pdo_mysql, mbstring, sodium, gd, fileinfo, curl, zip, intl, bcmath
+          coverage: pcov
+          # A HostGator não tem OPcache (ADR-005): o CI roda do mesmo jeito.
+          ini-values: opcache.enable=0, opcache.enable_cli=0, memory_limit=256M
+          tools: composer:v2
+
+      - name: Diretório de cache do Composer
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: composer-${{ runner.os }}-${{ hashFiles('backend/composer.lock') }}
+          restore-keys: composer-${{ runner.os }}-
+
+      - name: Instalar dependências
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Preparar o ambiente
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+
+      - name: Pint
+        run: |
+          ./vendor/bin/pint --test
+          # O ativador e os scripts de deploy seguem o mesmo estilo do backend
+          ./vendor/bin/pint --test ../deploy
+
+      - name: ShellCheck dos scripts de deploy
+        if: matrix.mysql == '8.0'
+        run: shellcheck -x -s bash ../deploy/ci/*.sh
+
+      - name: Larastan (nível 6)
+        run: ./vendor/bin/phpstan analyse --no-progress
+
+      - name: Pest (unit, feature e arch) com cobertura mínima de 80%
+        run: ./vendor/bin/pest --coverage --min=80
+
+      # T039: o contrato da API é gerado do código (Scramble) e versionado em docs/openapi.json.
+      # Os tipos do frontend saem desse arquivo, então ele nunca pode ficar para trás.
+      # Não depende do banco: roda só na perna do MySQL 8.0.
+      - name: OpenAPI (o export precisa ser igual a docs/openapi.json)
+        if: matrix.mysql == '8.0'
+        run: |
+          php artisan scramble:export --path=../docs/openapi.json
+          git diff --exit-code -- ../docs/openapi.json
+
+      # T028: o schema precisa ir, voltar e ir de novo nas duas versões do MySQL (migrations expand/contract).
+      - name: Migrations (fresh → rollback → migrate)
+        env:
+          DB_DATABASE: pibls_test
+          DB_USERNAME: pibls_app
+          DB_PASSWORD: secret
+        run: |
+          php artisan migrate:fresh --force
+          php artisan migrate:rollback --force
+          php artisan migrate --force
+
+  security:
+    name: Segurança (audit e Semgrep CE)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2 (tag móvel; este é o commit atual)
+        with:
+          php-version: "8.4"
+          tools: composer:v2
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+
+      - name: composer audit
+        working-directory: backend
+        run: composer audit
+
+      - name: npm audit (frontend, sem dependências de desenvolvimento)
+        working-directory: frontend
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: npm audit (e2e, sem dependências de desenvolvimento)
+        working-directory: e2e
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Semgrep CE (PHP, TypeScript e segredos)
+        env:
+          SEMGREP_ENABLE_VERSION_CHECK: "0"
+        run: |
+          python3 -m pip install --quiet "semgrep==1.182.0"
+          semgrep scan --metrics=off --error \
+            --config p/php --config p/typescript --config p/react --config p/secrets \
+            --exclude vendor --exclude node_modules --exclude build --exclude .react-router \
+            --exclude specs --exclude docs --exclude testsprite_tests \
+            backend frontend e2e deploy .github

@@ -1,0 +1,44 @@
+# Atualizações semanais de Composer, npm e GitHub Actions (T009).
+# Mudança de versão major da Technology Stack exige ADR (architecture.md), então os PRs de major
+# ficam desligados aqui. Alertas e PRs de segurança do Dependabot continuam valendo; se um deles
+# pedir um major, abra a ADR antes de aceitar.
+version: 2
+
+updates:
+  - package-ecosystem: composer
+    directory: /backend
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "chore(deps)"
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "chore(deps)"
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: npm
+    directory: /e2e
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "chore(deps)"
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+
+  # Mantém os SHAs fixados do ci.yml (e dos próximos workflows) atualizados
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "chore(ci)"

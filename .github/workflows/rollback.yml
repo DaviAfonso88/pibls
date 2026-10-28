@@ -1,0 +1,74 @@
+name: Rollback
+
+# Rollback de release (architecture.md → DevOps → Procedimento de rollback). Alvo: ≤ 10 min.
+#
+# Não rebuilda nada: envia `rollback.json` para a caixa de entrada do ambiente. O ativador (cron de 5 min) recopia o
+# `spa/` da release de destino para o docroot e troca o ponteiro `current.php`. NÃO roda migrations: pelo
+# expand/contract, a release anterior continua compatível com o schema novo.
+#
+# Sem `release_id`, volta para a anterior, que o ativador registra em `status/current.json`.
+# No Environment `production` o revisor aprova, como no deploy: a aprovação é deliberada.
+# Sem a janela de deploy: um rollback é justamente o que se faz numa emergência.
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Ambiente"
+        type: choice
+        options: [production, homolog]
+        default: production
+      release_id:
+        description: "Release de destino (AAAA.MM.N). Vazio = a anterior."
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  rollback:
+    name: Rollback em ${{ inputs.environment }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment:
+      name: ${{ inputs.environment }}
+      url: ${{ vars.SITE_URL }}
+    env:
+      FTP_HOST: ${{ secrets.FTP_HOST }}
+      FTP_USER: ${{ secrets.FTP_USER }}
+      FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Instalar lftp e jq
+        run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends lftp jq
+
+      - name: Pedir o rollback ao ativador
+        id: request
+        run: bash deploy/ci/request-rollback.sh "${{ inputs.release_id }}"
+
+      - name: Esperar o ativador (até 15 min)
+        run: >-
+          bash deploy/ci/wait-for-status.sh "${{ steps.request.outputs.release_id }}"
+          --rollback --since "${{ steps.request.outputs.requested_at }}"
+
+      - name: GET /api/health devolve a release de destino
+        env:
+          BASIC_AUTH: ${{ inputs.environment == 'homolog' && secrets.BASIC_AUTH || '' }}
+        run: bash deploy/ci/verify-health.sh "${{ vars.SITE_URL }}" "${{ steps.request.outputs.release_id }}"
+
+      - name: Resumo
+        run: |
+          {
+            echo "### Rollback concluído em ${{ inputs.environment }}"
+            echo ""
+            echo "- Release ativa agora: \`${{ steps.request.outputs.release_id }}\`"
+            echo "- Confira o PIX e os dados públicos (runbook docs/runbooks/rollback.md)"
+          } >> "$GITHUB_STEP_SUMMARY"
