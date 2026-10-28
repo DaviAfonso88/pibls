@@ -1,0 +1,47 @@
+[
+  {
+    "id": "TC001",
+    "title": "get api health returns ok status and release id when healthy",
+    "description": "Verify that GET /api/health returns HTTP 200 with a JSON body containing {status: ok, release: <id>} when the application and database are responding properly."
+  },
+  {
+    "id": "TC002",
+    "title": "get api health returns error status when unhealthy",
+    "description": "Verify that GET /api/health returns HTTP 503 with a JSON body containing {status: error} when the application or database is not responding."
+  },
+  {
+    "id": "TC003",
+    "title": "get sanctum csrf cookie sets xsrf token and session cookies",
+    "description": "Verify that GET /sanctum/csrf-cookie returns HTTP 204 and sets the XSRF-TOKEN and session cookies required for CSRF-protected authentication."
+  },
+  {
+    "id": "TC004",
+    "title": "post api auth login succeeds with valid credentials and xsrf token",
+    "description": "Verify that POST /api/auth/login with valid email and password along with a valid X-XSRF-TOKEN header returns HTTP 200 with user roles and permissions."
+  },
+  {
+    "id": "TC005",
+    "title": "post api auth login fails with invalid credentials",
+    "description": "Verify that POST /api/auth/login with invalid credentials returns HTTP 422 validation error."
+  },
+  {
+    "id": "TC006",
+    "title": "post api auth login fails without csrf cookie or xsrf token",
+    "description": "Verify that POST /api/auth/login without first obtaining CSRF cookie or without a valid X-XSRF-TOKEN header results in authentication failure or validation error."
+  },
+  {
+    "id": "TC007",
+    "title": "get api auth me returns authenticated user with valid session",
+    "description": "Verify that GET /api/auth/me with a valid authenticated session returns HTTP 200 with the authenticated user information."
+  },
+  {
+    "id": "TC008",
+    "title": "get api auth me returns 401 without authenticated session",
+    "description": "Verify that GET /api/auth/me without an authenticated session returns HTTP 401 unauthenticated error."
+  },
+  {
+    "id": "TC009",
+    "title": "get api public settings returns public church settings excluding notification recipients",
+    "description": "Verify that GET /api/public/settings returns HTTP 200 with public church settings including schedule, address, WhatsApp, and YouTube, and that the response does not contain the notification_recipients field."
+  }
+]

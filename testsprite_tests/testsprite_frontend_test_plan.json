@@ -1,0 +1,91 @@
+[
+  {
+    "id": "TC001",
+    "title": "The leader opens the registrations of an event from the events list",
+    "description": "The ministry leader signs in, opens the events list and follows the Inscritos link of the retreat to see the spots counter and the list.",
+    "category": "Registrations list",
+    "steps": [
+      { "type": "action", "description": "Navigate to /admin/entrar" },
+      { "type": "action", "description": "Fill the field E-mail with lider@pibls.test" },
+      { "type": "action", "description": "Fill the field Senha with the password given in the instructions" },
+      { "type": "action", "description": "Click the button Entrar" },
+      { "type": "action", "description": "Navigate to /admin/eventos" },
+      { "type": "assertion", "description": "Verify the event TS Retiro de inscritos is listed" },
+      { "type": "action", "description": "Click the link Inscritos in the row of TS Retiro de inscritos" },
+      { "type": "assertion", "description": "Verify the heading Inscritos is visible" },
+      { "type": "assertion", "description": "Verify the text 4 de 20 vagas preenchidas is visible" },
+      { "type": "assertion", "description": "Verify the table has the column headers Inscrito em, Nome, Telefone, E-mail and Tamanho da camiseta" },
+      { "type": "assertion", "description": "Verify the table shows the names Ana Souza Teste, Bruno Lima Teste, Carla Dias Teste and Diego Rocha Teste" }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC002",
+    "title": "The registrations list can be searched by name",
+    "description": "Typing part of a name in the search field narrows the table to the matching person.",
+    "category": "Registrations list",
+    "steps": [
+      { "type": "action", "description": "Sign in at /admin/entrar as lider@pibls.test with the password given in the instructions" },
+      { "type": "action", "description": "Navigate to /admin/eventos/45/inscritos" },
+      { "type": "assertion", "description": "Verify the text 4 de 20 vagas preenchidas is visible" },
+      { "type": "action", "description": "Type carla in the search field labeled Buscar" },
+      { "type": "action", "description": "Wait up to 30 seconds, until the table stops showing Ana Souza Teste (the search is applied after a short delay and a server request)" },
+      { "type": "assertion", "description": "Verify the table shows Carla Dias Teste" },
+      { "type": "assertion", "description": "Verify the names Ana Souza Teste and Diego Rocha Teste are not shown in the table" }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC003",
+    "title": "The leader exports the registrations as CSV and as PDF",
+    "description": "Both export buttons download a file and confirm it with a message.",
+    "category": "Export",
+    "steps": [
+      { "type": "action", "description": "Sign in at /admin/entrar as lider@pibls.test with the password given in the instructions" },
+      { "type": "action", "description": "Navigate to /admin/eventos/45/inscritos" },
+      { "type": "assertion", "description": "Verify the text 4 de 20 vagas preenchidas is visible" },
+      { "type": "assertion", "description": "Verify the text starting with O arquivo exportado tem dados pessoais is visible" },
+      { "type": "action", "description": "Click the button Exportar CSV" },
+      { "type": "assertion", "description": "Verify the message CSV baixado. appears" },
+      { "type": "action", "description": "Click the button Exportar PDF" },
+      { "type": "action", "description": "Wait up to 45 seconds: the message Gerando o PDF… appears first and is replaced by the confirmation when the file is ready" },
+      { "type": "assertion", "description": "Verify the message PDF baixado. appears" }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC004",
+    "title": "Cancelling a registration asks for confirmation and gives the spot back",
+    "description": "The leader cancels Diego, first keeping the registration and then confirming, and the counter goes from 4 to 3.",
+    "category": "Cancel",
+    "steps": [
+      { "type": "action", "description": "Sign in at /admin/entrar as lider@pibls.test with the password given in the instructions" },
+      { "type": "action", "description": "Navigate to /admin/eventos/45/inscritos" },
+      { "type": "assertion", "description": "Verify the text 4 de 20 vagas preenchidas is visible" },
+      { "type": "action", "description": "Click the button Cancelar a inscrição de Diego Rocha Teste in the table" },
+      { "type": "assertion", "description": "Verify the dialog text A inscrição de Diego Rocha Teste será excluída definitivamente e a vaga liberada. Confirmar? is visible" },
+      { "type": "action", "description": "Click the button Manter inscrição" },
+      { "type": "assertion", "description": "Verify the text 4 de 20 vagas preenchidas is still visible and Diego Rocha Teste is still in the table" },
+      { "type": "action", "description": "Click the button Cancelar a inscrição de Diego Rocha Teste in the table" },
+      { "type": "action", "description": "Click the button Cancelar inscrição in the dialog" },
+      { "type": "assertion", "description": "Verify the message Inscrição cancelada. A vaga voltou a ficar disponível. appears" },
+      { "type": "assertion", "description": "Verify the text 3 de 20 vagas preenchidas is visible" },
+      { "type": "assertion", "description": "Verify Diego Rocha Teste is no longer in the table" }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC005",
+    "title": "A leader cannot open the registrations of another ministry's event",
+    "description": "The event TS Evento de outro ministério belongs to a ministry that is not the leader's, so its registrations page says the event was not found.",
+    "category": "Authorization",
+    "steps": [
+      { "type": "action", "description": "Sign in at /admin/entrar as lider@pibls.test with the password given in the instructions" },
+      { "type": "action", "description": "Navigate to /admin/eventos/46/inscritos" },
+      { "type": "assertion", "description": "Verify the text Não encontramos este evento. is visible" },
+      { "type": "assertion", "description": "Verify the name Elisa Prado Teste does not appear anywhere on the page" },
+      { "type": "assertion", "description": "Verify the text vagas preenchidas is not on the page" }
+    ],
+    "priority": "High"
+  }
+]
