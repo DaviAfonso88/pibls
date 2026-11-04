@@ -16,6 +16,8 @@ coverage/
 *.tsbuildinfo
 # Pacote de release montado à mão (deploy/empacotar-local.sh)
 deploy/.release-local/
+# Arquivos enviados pelo painel no ambiente local (em produção ficam em public_html/uploads)
+backend/public/uploads/
 
 # Testes
 .phpunit.cache/
