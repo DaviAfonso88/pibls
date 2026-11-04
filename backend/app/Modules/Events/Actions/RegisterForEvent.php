@@ -23,9 +23,11 @@ use Illuminate\Validation\ValidationException;
  *
  *  1. trava a linha do evento (`SELECT … FOR UPDATE`): as inscrições do mesmo evento passam uma de cada vez;
  *  2. confere prazo e início (BR-020) e vagas (BR-021), contando as inscrições já gravadas;
- *  3. valida o que depende do formulário vigente: responsável (BR-023), consentimento de saúde (BR-083) e respostas
- *     (BR-024). Tudo é lido sob o bloqueio, então vale o formulário do instante da inscrição;
- *  4. grava; a constraint única (evento, telefone, nome normalizado) recusa a duplicada (BR-022);
+ *  3. valida o que depende do formulário vigente: nome e telefone, se o evento os pede (BR-004, ADR-025), responsável
+ *     (BR-023), consentimento de saúde (BR-083) e respostas (BR-024). Tudo é lido sob o bloqueio, então vale o formulário
+ *     do instante da inscrição. Campo fixo que o evento não pede é descartado, mesmo que venha no pedido;
+ *  4. grava; a constraint única (evento, telefone, nome normalizado) recusa a duplicada (BR-022). Sem o nome ou sem o
+ *     telefone (o evento não os pede), ela não compara e a duplicidade não é barrada;
  *  5. emite `RegistrationCreated`, cujo listener enfileira a confirmação.
  *
  * E-mail nunca é enviado aqui: a falha do SMTP não desfaz a inscrição.
@@ -34,8 +36,8 @@ final class RegisterForEvent
 {
     /**
      * @param  array{
-     *     participant_name: string,
-     *     phone: string,
+     *     participant_name: string|null,
+     *     phone: string|null,
      *     email: string|null,
      *     guardian_name: string|null,
      *     guardian_phone: string|null,
@@ -57,15 +59,15 @@ final class RegisterForEvent
             $schema = FormSchema::from($event->form_schema);
             $fields = $this->validated($event, $schema, $data);
 
-            $name = PersonName::from($data['participant_name']);
+            $name = $event->asks_participant_name ? PersonName::tryFrom($data['participant_name']) : null;
 
             try {
                 $registration = EventRegistration::query()->create([
                     'event_id' => $event->getKey(),
-                    'participant_name' => $name->value(),
-                    'participant_name_normalized' => $name->normalized(),
-                    'phone' => $data['phone'],
-                    'email' => $data['email'],
+                    'participant_name' => $name?->value(),
+                    'participant_name_normalized' => $name?->normalized(),
+                    'phone' => $event->asks_phone ? $data['phone'] : null,
+                    'email' => $event->asks_email ? $data['email'] : null,
                     ...$fields,
                     ...$consent->toAttributes(),
                     'health_consent_at' => $schema->hasSensitiveField() ? $consent->at->format('Y-m-d H:i:s') : null,
@@ -97,7 +99,8 @@ final class RegisterForEvent
     }
 
     /**
-     * Responsável, consentimento de saúde e respostas, contra o formulário vigente.
+     * Nome e telefone (quando o evento os pede), responsável, consentimento de saúde e respostas, contra o formulário
+     * vigente.
      *
      * @param  array<string, mixed>  $data
      * @return array<string, mixed> os campos a gravar além dos fixos
@@ -106,6 +109,14 @@ final class RegisterForEvent
     {
         $errors = [];
         $guardian = [];
+
+        if ($event->asks_participant_name && ($data['participant_name'] ?? null) === null) {
+            $errors['participant_name'] = [__('business.BR-004.0')];
+        }
+
+        if ($event->asks_phone && ($data['phone'] ?? null) === null) {
+            $errors['phone'] = [__('business.BR-004.1')];
+        }
 
         if ($event->has_minors) {
             $name = PersonName::tryFrom($data['guardian_name'] ?? null);

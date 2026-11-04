@@ -38,6 +38,12 @@ class BulletinFactory extends Factory
         return $this->state(fn () => ['published_at' => now()->addDays(3)]);
     }
 
+    /** Publicado por link externo, sem PDF (BR-084). */
+    public function linked(string $url = 'https://heyzine.com/flip-book/4954dbb36f.html'): static
+    {
+        return $this->state(fn () => ['pdf_path' => null, 'pdf_size_bytes' => null, 'external_url' => $url]);
+    }
+
     public function trashed(): static
     {
         return $this->state(fn () => ['deleted_at' => now()]);

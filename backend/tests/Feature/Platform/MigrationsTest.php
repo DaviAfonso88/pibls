@@ -51,6 +51,17 @@ it('BR-040 aceita a mesma edição de boletim só depois da exclusão lógica da
     expect(Bulletin::factory()->create(['edition_number' => 7]))->toBeInstanceOf(Bulletin::class);
 });
 
+it('BR-084 o banco recusa boletim sem PDF e sem link, ou com os dois', function () {
+    if (version_compare(DB::connection()->getServerVersion(), '8.0.16', '<')) {
+        $this->markTestSkipped('O MySQL 5.7 aceita a CHECK, mas a ignora.');
+    }
+
+    expect(fn () => Bulletin::factory()->create(['pdf_path' => null, 'pdf_size_bytes' => null]))->toThrow(QueryException::class)
+        ->and(fn () => Bulletin::factory()->create(['external_url' => 'https://heyzine.com/flip-book/1.html']))->toThrow(QueryException::class)
+        ->and(Bulletin::factory()->linked()->create())->toBeInstanceOf(Bulletin::class)
+        ->and(Bulletin::factory()->create())->toBeInstanceOf(Bulletin::class);
+});
+
 it('BR-032 aceita o mesmo slug de mensagem só depois da exclusão lógica da anterior', function () {
     PalavraVivaPost::factory()->create(['slug' => 'graca-e-paz']);
 

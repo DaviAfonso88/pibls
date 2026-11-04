@@ -9,9 +9,10 @@ import type { PublicSettings } from "~/shared/site/settings";
 import { buttonClassName } from "~/shared/ui/button-variants";
 import { BrandSymbol } from "~/shared/ui/brand-logo";
 
-// `gap-1.5`: num `inline-flex` o espaço entre o texto e o <span> seguinte some, e "WhatsApp" colava no número
+// `gap-x-1.5`: num `inline-flex` o espaço entre o texto e o <span> seguinte some, e "WhatsApp" colava no número.
+// `flex-wrap`: na coluna estreita do celular o número desce de linha em vez de invadir a coluna ao lado
 const linkClass =
-  "inline-flex min-h-11 items-center gap-1.5 text-footer-foreground hover:underline";
+  "inline-flex min-h-11 flex-wrap items-center gap-x-1.5 text-footer-foreground underline-offset-4 hover:underline";
 const headingClass = "m-0 text-[13px] font-bold tracking-widest text-footer-muted uppercase";
 
 /** Linhas de texto separadas por quebra de linha, sem `key` repetida. */
@@ -55,9 +56,9 @@ export function SiteFooter({ settings }: { settings: PublicSettings | undefined 
   return (
     <footer
       aria-label={messages.a11y.footer}
-      className="bg-footer px-4 pt-10 pb-8 text-[15px] leading-relaxed text-footer-text"
+      className="bg-footer px-4 pt-12 pb-8 text-[15px] leading-relaxed text-footer-text md:pt-16"
     >
-      <div className="container flex flex-col gap-7 px-0">
+      <div className="container flex flex-col gap-8 px-0">
         <div className="flex items-center gap-3">
           <BrandSymbol className="size-12" />
           <span className="text-[22px] leading-none font-extrabold tracking-wide text-footer-foreground">
@@ -66,7 +67,7 @@ export function SiteFooter({ settings }: { settings: PublicSettings | undefined 
         </div>
 
         {youtube ? (
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-4 rounded-2xl border border-footer-border bg-primary/25 p-5">
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-4 rounded-3xl border border-footer-border bg-primary/25 p-5 md:p-6">
             <span
               aria-hidden="true"
               className="flex size-12 flex-none items-center justify-center rounded-full bg-highlight text-highlight-foreground"
@@ -95,8 +96,8 @@ export function SiteFooter({ settings }: { settings: PublicSettings | undefined 
           </div>
         ) : null}
 
-        <div className="flex flex-wrap gap-x-6 gap-y-7">
-          <section className="flex min-w-40 flex-1 flex-col gap-1.5">
+        <div className="grid grid-cols-2 gap-x-6 gap-y-8 lg:grid-cols-4">
+          <section className="flex min-w-0 flex-col gap-1.5">
             <h2 className={headingClass}>{messages.site.footerWhere}</h2>
             {address.length > 0 ? <Lines lines={address} /> : null}
             <Link to="/como-chegar" className={`${linkClass} font-bold`}>
@@ -104,7 +105,7 @@ export function SiteFooter({ settings }: { settings: PublicSettings | undefined 
             </Link>
           </section>
 
-          <section className="flex min-w-40 flex-1 flex-col gap-1.5">
+          <section className="flex min-w-0 flex-col gap-1.5">
             <h2 className={headingClass}>{messages.site.footerServices}</h2>
             {services.length > 0 ? <Lines lines={services} /> : null}
             <Link to="/#horarios" className={`${linkClass} font-bold`}>
@@ -112,7 +113,7 @@ export function SiteFooter({ settings }: { settings: PublicSettings | undefined 
             </Link>
           </section>
 
-          <section className="flex min-w-40 flex-1 flex-col gap-1.5">
+          <section className="flex min-w-0 flex-col gap-1.5">
             <h2 className={headingClass}>{messages.site.footerContact}</h2>
             {whatsapp && settings?.whatsapp ? (
               <ExternalLink href={whatsapp}>
@@ -132,7 +133,7 @@ export function SiteFooter({ settings }: { settings: PublicSettings | undefined 
             ) : null}
           </section>
 
-          <section className="flex min-w-40 flex-1 flex-col gap-1.5">
+          <section className="flex min-w-0 flex-col gap-1.5">
             <h2 className={headingClass}>{messages.site.footerParticipate}</h2>
             <Link to="/sou-visitante" className={linkClass}>
               {messages.nav.visitor}
@@ -143,6 +144,9 @@ export function SiteFooter({ settings }: { settings: PublicSettings | undefined 
             <Link to="/pedido-de-oracao" className={linkClass}>
               {messages.nav.prayer}
             </Link>
+            <ExternalLink href={institution.youthSite.url}>
+              <span translate="no">{institution.youthSite.name}</span>
+            </ExternalLink>
           </section>
         </div>
 

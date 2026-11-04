@@ -26,7 +26,7 @@ export default function AdminEvento() {
   if (settings === undefined) return <LoadingBlock count={3} className="mx-auto max-w-6xl" />;
   if (!settings.features.events) return <AdminNotFound />;
 
-  const lockedMinistryId = can("eventos.write") ? null : (user.ministry?.id ?? null);
+  const ownMinistryId = can("eventos.write") ? null : (user.ministry?.id ?? null);
 
   return (
     <RequirePermission permission={["eventos.write", "eventos.write.own"]}>
@@ -38,7 +38,7 @@ export default function AdminEvento() {
           id: ministryId,
           name,
         }))}
-        lockedMinistryId={lockedMinistryId}
+        ownMinistryId={ownMinistryId}
       />
     </RequirePermission>
   );

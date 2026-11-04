@@ -44,8 +44,8 @@ describe("conteúdo de Quem somos", () => {
   it("o pastor titular é o Pr. Alan Taques, com biografia e formação", () => {
     expect(titularPastor.name).toBe("Pr. Alan Gefferson de Assunção Taques");
     expect(titularPastor.since).toBe("outubro de 2026");
-    expect(titularPastor.biography).toHaveLength(3);
-    expect(titularPastor.education).toHaveLength(4);
+    expect(titularPastor.biography).toHaveLength(4);
+    expect(titularPastor.education).toHaveLength(7);
   });
 
   it("a Declaração de Fé é um link da CBB", () => {

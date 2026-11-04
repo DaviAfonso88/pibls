@@ -74,28 +74,53 @@ export const pastorWithTwoTerms = "Sebastião Oliveira de Souza";
 export const titularPastor = {
   name: "Pr. Alan Gefferson de Assunção Taques",
   since: "outubro de 2026",
+  // Texto enviado pela liderança em 2026-10-30. O parágrafo da formação ("É graduado em Teologia, Psicologia e
+  // Licenciatura em Matemática, possui pós-graduação em Terapia Familiar Sistêmica, Geografia e Arqueologia Bíblica,
+  // além de formação em Liderança Avançada pelo Instituto Haggai.") aparece como a lista `education`, não como parágrafo
   biography: [
-    "Pastor batista desde 25 de março de 2000, o Pr. Alan Taques atuou por mais de duas décadas na Primeira Igreja Batista de Montes Claros, e atualmente pastoreia a Primeira Igreja Batista em Lagoa Santa com dedicação, simplicidade e zelo pela Palavra de Deus.",
-    "Casado com Sara Soares Taques, pai de Lucas Henrique e Lisa Esther, entende que sua vocação pastoral está diretamente ligada ao cuidado das pessoas, ao ensino das Escrituras e ao fortalecimento da Igreja local como testemunha viva do Evangelho.",
-    "Seu ministério é marcado por pregação bíblica, discipulado intencional e paixão por missões, com a firme convicção de que a Igreja deve viver para a glória de Deus e ser um instrumento de transformação em sua geração.",
+    "Há mais de 26 anos, o Pr. Alan Taques dedica sua vida ao ministério pastoral, servindo a Deus e cuidando de pessoas por meio da pregação da Palavra, do discipulado e do ensino das Escrituras.",
+    "Iniciou seu ministério em Montes Claros (MG), onde pastoreou a Igreja Batista do bairro Independência e, posteriormente, a Primeira Igreja Batista de Montes Claros por mais de duas décadas. Também pastoreou a Primeira Igreja Batista em Ponte Nova e, atualmente, serve como pastor titular da Primeira Igreja Batista em Lagoa Santa.",
+    "Casado com Sara Soares Taques, é pai de Lucas Henrique, casado com Julia Monique, e de Lisa Esther. Sua caminhada ministerial é marcada pelo compromisso com a Bíblia, pelo cuidado com as famílias, pela formação de discípulos e pela paixão pela obra missionária.",
+    "Seu desejo é servir a Deus com fidelidade, cuidar de pessoas com amor e conduzir a Igreja a viver e anunciar o Evangelho de Jesus Cristo, para a glória de Deus.",
   ],
+  // As instituições de Teologia e Psicologia vêm do texto anterior da liderança; o novo não as cita
   education: [
     {
       title: "Graduado em Teologia",
       institution: "Seminário Teológico do Norte de Minas (convalidado pela UNICESUMAR)",
     },
     { title: "Graduado em Psicologia", institution: "Centro Universitário FIPMOC" },
+    { title: "Licenciado em Matemática", institution: null },
     { title: "Pós-graduado em Terapia Familiar Sistêmica", institution: null },
+    { title: "Pós-graduado em Geografia", institution: null },
+    { title: "Pós-graduado em Arqueologia Bíblica", institution: null },
     { title: "Formação em Liderança Avançada", institution: "Instituto Haggai" },
   ],
 } as const;
 
-/** "Como somos": o jeito da igreja, em texto enviado pela liderança. */
-export const howWeAre = {
-  intro:
-    "Temos a Bíblia como nossa norma de fé e prática, cultivamos o amor entre os irmãos, e cumprimos a missão ordenada por Jesus de fazer discípulos:",
+export interface Pillar {
+  key: "biblia" | "amor" | "missao";
+  title: string;
+  text: string;
+}
+
+/**
+ * "Como somos": o jeito da igreja, em texto enviado pela liderança ("Temos a Bíblia como nossa norma de fé e prática,
+ * cultivamos o amor entre os irmãos, e cumprimos a missão ordenada por Jesus de fazer discípulos: as pessoas, de fato,
+ * importam para nós!"). Os três pilares são as três partes da frase, com as mesmas palavras.
+ */
+export const howWeAre: { readonly pillars: readonly Pillar[]; readonly highlight: string } = {
+  pillars: [
+    { key: "biblia", title: "A Bíblia", text: "Temos a Bíblia como nossa norma de fé e prática." },
+    { key: "amor", title: "O amor", text: "Cultivamos o amor entre os irmãos." },
+    {
+      key: "missao",
+      title: "A missão",
+      text: "Cumprimos a missão ordenada por Jesus de fazer discípulos.",
+    },
+  ],
   highlight: "As pessoas, de fato, importam para nós!",
-} as const;
+};
 
 /** Ceia do Senhor: quando acontece e quem pode participar. */
 export const lordsSupper = {

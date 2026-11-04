@@ -48,6 +48,9 @@ const eventParser = object({
   description: string,
   banner_url: nullish(string),
   has_minors: boolean,
+  asks_participant_name: boolean,
+  asks_phone: boolean,
+  asks_email: boolean,
   form_schema: array(formFieldParser),
   is_published: boolean,
   max_spots: nullish(number),
@@ -121,7 +124,8 @@ export interface FormFieldInput {
 export interface EventInput {
   title: string;
   slug: string;
-  ministry_id: number;
+  /** Nulo = sem ministério responsável; só quem escreve em todos os ministérios pode deixar assim (ADR-025). */
+  ministry_id: number | null;
   /** HTML do editor; o servidor sanitiza de novo (BR-046). */
   description: string;
   starts_at: string;
@@ -130,6 +134,10 @@ export interface EventInput {
   max_spots: number | null;
   registration_deadline: string | null;
   has_minors: boolean;
+  /** Se o formulário de inscrição mostra o nome completo, o telefone e o e-mail (ADR-025). */
+  asks_participant_name: boolean;
+  asks_phone: boolean;
+  asks_email: boolean;
   form_schema: FormFieldInput[];
 }
 
@@ -168,6 +176,9 @@ export async function updateEvent(
       max_spots: input.max_spots,
       registration_deadline: input.registration_deadline,
       has_minors: input.has_minors,
+      asks_participant_name: input.asks_participant_name,
+      asks_phone: input.asks_phone,
+      asks_email: input.asks_email,
       form_schema: input.form_schema,
       ...(confirmSchemaChange ? { confirm_schema_change: true } : {}),
     }),

@@ -1,4 +1,4 @@
-import { ArrowDownIcon, ArrowUpIcon, LockIcon, PlusIcon, Trash2Icon } from "lucide-react";
+import { ArrowDownIcon, ArrowUpIcon, PlusIcon, Trash2Icon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { messages } from "~/shared/messages";
 import { Alert } from "~/shared/ui/alert";
@@ -152,19 +152,6 @@ export function FormBuilder({
 
   return (
     <div className="flex flex-col gap-4">
-      <ul aria-label={text.fixedLabel} className="m-0 flex list-none flex-col gap-2 p-0">
-        {text.fixed.map((item) => (
-          <li
-            key={item.name}
-            className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-[10px] border border-border bg-muted/50 px-3.5 py-3"
-          >
-            <LockIcon aria-hidden="true" className="size-4 flex-none text-muted-foreground" />
-            <span className="flex-[1_1_12rem] font-bold">{item.name}</span>
-            <span className="text-sm text-muted-foreground">{item.rule}</span>
-          </li>
-        ))}
-      </ul>
-
       {fields.length === 0 ? (
         <p className="m-0 text-muted-foreground">{text.empty}</p>
       ) : (

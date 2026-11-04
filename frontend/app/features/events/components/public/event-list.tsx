@@ -43,12 +43,15 @@ function EventCard({ event }: { event: PublicEventSummary }) {
           className="aspect-video w-full object-cover"
         />
       ) : (
+        // Sem banner, uma faixa baixa com o ícone pequeno, em vez de um bloco do tamanho da foto
         <div
           role="img"
           aria-label={text.bannerPlaceholder}
-          className="flex aspect-video items-center justify-center bg-muted text-muted-foreground"
+          className="flex h-16 items-center bg-info px-5 text-info-foreground"
         >
-          <CalendarIcon aria-hidden="true" className="size-10" strokeWidth={1.5} />
+          <span className="flex size-9 items-center justify-center rounded-full bg-background">
+            <CalendarIcon aria-hidden="true" className="size-[18px]" strokeWidth={2} />
+          </span>
         </div>
       )}
       <div className="flex flex-1 flex-col gap-1.5 px-5 pt-4 pb-5">

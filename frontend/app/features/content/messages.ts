@@ -16,6 +16,15 @@ export const homeMessages = {
   schedule: "Horários",
   scheduleHint: "Todos os cultos são abertos. Não é preciso avisar antes.",
   seeGroups: "Ver grupos e Células de CL",
+  /** Convite para a Ficha de Visitante: as opções são as que o formulário oferece. */
+  visitorEyebrow: "Ficha de Visitante",
+  visitorTitle: "É visitante? A gente quer conhecer você.",
+  visitorLead:
+    "Deixe seu contato na ficha e a equipe de acolhimento fala com você pelo WhatsApp. Se quiser, peça também para:",
+  visitorOptions: ["Receber uma visita", "Conhecer uma Célula de CL", "Participar de um grupo"],
+  visitorCta: "Preencher a Ficha de Visitante",
+  visitorPrivacy:
+    "Seus dados ficam só com a equipe da igreja e são usados apenas para falar com você.",
   liveAndContact: "Transmissões e atendimento",
   youtubeEyebrow: "Batista em Lagoa Santa no YouTube",
   watchServices: "Assista aos cultos",
@@ -24,7 +33,8 @@ export const homeMessages = {
   live: "Ao vivo",
   channel: "Canal no YouTube",
   talkToUs: "Fale com a gente",
-  talkToUsHint: "Dúvidas, oração ou uma conversa: a equipe responde pelo WhatsApp.",
+  talkToUsHint: "Dúvidas ou uma conversa: a equipe responde pelo WhatsApp.",
+  talkToUsForm: "Prefere escrever? Use o formulário",
   highlights: "Para ler nesta semana",
   bulletinNumber: (edition: number): string => `Boletim nº ${edition}`,
   readBulletin: "Ler boletim",
@@ -42,6 +52,18 @@ export const homeMessages = {
   prayerHint: "Conte pelo que você quer que a gente ore. Você pode enviar sem se identificar.",
   prayerPrivacy: "Seu pedido é lido apenas pela equipe de oração. Ele não aparece no site.",
   prayerCta: "Fazer um pedido de oração",
+  /** Seção da Juventude Salt, que tem site próprio (o lema e os pilares vêm do site deles). */
+  youthEyebrow: "Jovens e adolescentes",
+  youthLead:
+    "Uma juventude que vive a fé com propósito, amizade e impacto, conectando pessoas e transformando vidas.",
+  youthPillarsLabel: "Pilares da Juventude",
+  youthPillars: ["Fé", "Comunidade", "Missão"],
+  youthVerse: "Vocês são o sal da terra… Vocês são a luz do mundo.",
+  youthVerseRef: "Mateus 5.13-14",
+  youthCta: "Conhecer o site da Juventude",
+  instagramTitle: "Acompanhe a igreja no Instagram",
+  instagramHint: "Fotos, avisos e o dia a dia da nossa igreja, para você ficar por perto.",
+  instagramCta: "Visitar o Instagram",
 } as const;
 
 export const directionsMessages = {
@@ -59,14 +81,27 @@ export const directionsMessages = {
 
 export const aboutMessages = {
   aboutTitle: "Quem somos",
+  aboutEyebrow: "Igreja batista em Lagoa Santa",
+  aboutIntro:
+    "Desde 13 de janeiro de 1985, quando a igreja nasceu no bairro Promissão, em Lagoa Santa.",
+  onThisPage: "Nesta página",
   yearsOfFaith: "anos de fé e serviço",
   ourHistory: "Nossa história",
+  historyEyebrow: "Desde 1985",
+  historyIntro: "Da fundação no bairro Promissão à reconstrução do templo, os marcos da caminhada.",
   supportRebuild: "Apoie a reconstrução do templo",
   titularPastor: "Pastor titular",
+  pastorEyebrow: "Liderança",
   pastorEducation: "Formação",
   formerPastors: "Pastores que serviram a igreja",
+  formerPastorsHint: (twoTerms: string): string =>
+    `Na ordem do Guia Institucional. O Pr. ${twoTerms} pastoreou a igreja em duas ocasiões.`,
   howWeAre: "Como somos",
+  howWeAreEyebrow: "Nossa identidade",
   whatWeBelieve: "No que cremos",
+  creedEyebrow: "Doutrina",
+  creedText:
+    "Somos uma igreja batista filiada à Convenção Batista Brasileira (CBB) e seguimos a sua Declaração Doutrinária.",
   readCreed: "Ler a Declaração de Fé",
   memberTitle: "Quer ser membro da igreja?",
   memberHint:
@@ -96,12 +131,21 @@ export const publicContentMessages = {
 
   postsTitle: "Palavra Viva",
   postsIntro: "Mensagens pastorais para ler durante a semana, algumas com vídeo.",
-  latestPost: (date: string): string => `Mais recente · ${date}`,
+  postsListLabel: "Mensagens",
   readPost: "Ler mensagem",
-  previousPosts: "Mensagens anteriores",
   withVideo: "Com vídeo",
   noPosts: "Nenhuma mensagem publicada ainda.",
-  videoThumbnail: "Miniatura do vídeo da mensagem",
+  searchLabel: "Pesquisar mensagens",
+  searchPlaceholder: "Título, tema ou palavra…",
+  searchSubmit: "Buscar",
+  searchResults: (total: number, term: string): string =>
+    total === 1
+      ? `1 mensagem encontrada para “${term}”.`
+      : `${total} mensagens encontradas para “${term}”.`,
+  noSearchResults: (term: string): string => `Nenhuma mensagem encontrada para “${term}”.`,
+  noSearchResultsHint: "Confira a grafia ou tente outra palavra.",
+  clearSearch: "Limpar busca",
+  seeAllPosts: "Ver todas as mensagens",
 
   backToPosts: "Todas as mensagens",
   postEyebrow: (date: string): string => `Palavra Viva · ${date}`,

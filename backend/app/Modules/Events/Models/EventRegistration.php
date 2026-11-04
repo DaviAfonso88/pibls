@@ -15,13 +15,14 @@ use Illuminate\Support\Carbon;
 
 /**
  * Inscrição em um evento (R2). `answers` (🔒) guarda o JSON `[{key, label, type, value}]` cifrado.
- * O cancelamento pelo painel é exclusão definitiva e libera a vaga (BR-034).
+ * O cancelamento pelo painel é exclusão definitiva e libera a vaga (BR-034). Nome e telefone ficam nulos quando o
+ * formulário do evento não os pede (ADR-025).
  *
  * @property int $id
  * @property int $event_id
- * @property string $participant_name
- * @property string $participant_name_normalized
- * @property string $phone
+ * @property string|null $participant_name
+ * @property string|null $participant_name_normalized
+ * @property string|null $phone
  * @property string|null $email
  * @property string|null $guardian_name
  * @property string|null $guardian_phone

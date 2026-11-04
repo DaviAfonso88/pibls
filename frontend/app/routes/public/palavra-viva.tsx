@@ -12,7 +12,7 @@ export function meta() {
   });
 }
 
-/** Palavra Viva (design: PalavraViva; CAP-03): a mensagem mais recente em destaque e as anteriores. */
+/** Palavra Viva (design: PalavraViva; CAP-03): busca e todas as mensagens em cartões, das mais recentes às mais antigas. */
 export default function PalavraViva() {
   return (
     <>

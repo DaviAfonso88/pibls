@@ -71,6 +71,9 @@ function eventFixture(overrides: Record<string, unknown> = {}) {
     banner_url: null,
     description: "<p>Um dia inteiro de comunhão.</p>",
     has_minors: false,
+    asks_participant_name: true,
+    asks_phone: true,
+    asks_email: true,
     form_schema: [],
     registration: { state: "INSCRICOES_ABERTAS", deadline: null, spots_total: 30, spots_left: 22 },
     ...overrides,
@@ -115,7 +118,7 @@ const consentBox = () => screen.getByRole("checkbox", { name: /Li e concordo/ })
 
 async function fillFixedFields(user: ReturnType<typeof userEvent.setup>) {
   await user.type(screen.getByLabelText("Nome completo"), "Ana Souza");
-  await user.type(screen.getByLabelText("WhatsApp"), "31999998888");
+  await user.type(screen.getByLabelText("Telefone"), "31999998888");
 }
 
 beforeEach(() => {
@@ -130,7 +133,7 @@ describe("formulário dinâmico", () => {
 
     expect(await screen.findByRole("heading", { name: text.registration })).toBeVisible();
     expect(screen.getByLabelText("Nome completo")).toHaveAttribute("autocomplete", "name");
-    expect(screen.getByLabelText("WhatsApp")).toHaveAttribute("inputmode", "tel");
+    expect(screen.getByLabelText("Telefone")).toHaveAttribute("inputmode", "tel");
     expect(screen.getByLabelText(/^E-mail/)).toHaveAttribute("type", "email");
     // SELECT com mais de 4 opções: lista; com até 4: botões de rádio
     expect(screen.getByRole("combobox", { name: "Tamanho da camiseta" })).toBeVisible();
@@ -274,6 +277,72 @@ describe("formulário dinâmico", () => {
   });
 });
 
+describe("campos padrão que o evento não pede (ADR-025)", () => {
+  it("sem nome, telefone e e-mail: os campos não aparecem, nada deles vai no envio e a confirmação não fala de e-mail", async () => {
+    const user = userEvent.setup();
+    const bodies = mockEvent(
+      eventFixture({ asks_participant_name: false, asks_phone: false, asks_email: false }),
+      () =>
+        HttpResponse.json(
+          {
+            data: {
+              id: 846,
+              event_title: "Retiro de jovens",
+              participant_name: null,
+              starts_at: "2099-12-05T11:00:00Z",
+              confirmation_email_queued: false,
+            },
+          },
+          { status: 201 },
+        ),
+    );
+    renderEvent();
+    await screen.findByRole("heading", { name: text.registration });
+
+    expect(screen.queryByLabelText("Nome completo")).toBeNull();
+    expect(screen.queryByLabelText("Telefone")).toBeNull();
+    expect(screen.queryByLabelText(/^E-mail/)).toBeNull();
+
+    await user.click(consentBox());
+    await user.click(submit());
+
+    await waitFor(() => expect(bodies).toHaveLength(1));
+    expect(bodies[0]).toEqual({ answers: {}, consent: true, website: "" });
+
+    const done = await screen.findByRole("status");
+    expect(done).toHaveTextContent("Retiro de jovens");
+    expect(done).not.toHaveTextContent(text.successParticipant);
+    expect(done).not.toHaveTextContent(text.successEmail);
+  });
+
+  it("BR-004 o campo que o evento pede continua obrigatório; o que ele não pede não é validado", async () => {
+    const user = userEvent.setup();
+    const bodies = mockEvent(eventFixture({ asks_participant_name: false }));
+    renderEvent();
+    await screen.findByRole("heading", { name: text.registration });
+
+    expect(screen.queryByLabelText("Nome completo")).toBeNull();
+    await user.click(consentBox());
+    await user.click(submit());
+
+    expect(await screen.findByLabelText("Telefone")).toHaveAccessibleDescription(
+      "Informe um telefone válido com DDD.",
+    );
+    expect(bodies).toHaveLength(0);
+
+    await user.type(screen.getByLabelText("Telefone"), "31999998888");
+    await user.click(submit());
+
+    await waitFor(() => expect(bodies).toHaveLength(1));
+    expect(bodies[0]).toEqual({
+      phone: "+5531999998888",
+      answers: {},
+      consent: true,
+      website: "",
+    });
+  });
+});
+
 describe("evento com menores (BR-023)", () => {
   it("mostra o bloco do responsável legal e exige os três campos", async () => {
     const user = userEvent.setup();
@@ -409,13 +478,13 @@ describe("respostas do servidor", () => {
     await user.click(consentBox());
     await user.click(submit());
 
-    expect(await screen.findByLabelText("WhatsApp")).toHaveAccessibleDescription(
+    expect(await screen.findByLabelText("Telefone")).toHaveAccessibleDescription(
       "Informe um telefone válido com DDD.",
     );
     expect(screen.getByLabelText(/Camiseta/)).toHaveAccessibleDescription(
       "Este campo é obrigatório.",
     );
-    expect(screen.getByLabelText("WhatsApp")).toHaveFocus();
+    expect(screen.getByLabelText("Telefone")).toHaveFocus();
     expect(screen.getByLabelText("Nome completo")).toHaveValue("Ana Souza");
   });
 

@@ -248,7 +248,7 @@ export function TodayRegistrations() {
                   <TableCell className="px-5 py-3 tabular-nums">
                     {formatTime(registration.created_at)}
                   </TableCell>
-                  <TableCell className="py-3 font-semibold">{registration.name}</TableCell>
+                  <TableCell className="py-3 font-semibold">{registration.name || "—"}</TableCell>
                   <TableCell className="py-3 whitespace-normal">
                     {registration.event.title}
                   </TableCell>

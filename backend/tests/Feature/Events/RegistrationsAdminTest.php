@@ -362,6 +362,16 @@ it('BR-030 o líder (.own) vê, exporta e cancela as inscrições do próprio mi
     deleteJson(regAdminUrl($event, "/{$registration->getKey()}"), ['reason' => 'CANCELLED'])->assertNoContent();
 });
 
+it('ADR-025 o líder (.own) vê, exporta e cancela as inscrições de um evento geral, sem ministério', function () {
+    asStaff('LIDER_MINISTERIO');
+    $general = regAdminEvent(['ministry_id' => null]);
+    $registration = regAdminRegistration($general);
+
+    getJson(regAdminUrl($general))->assertOk()->assertJsonPath('meta.total', 1);
+    getJson(regAdminUrl($general, '/export.csv'))->assertOk()->streamedContent();
+    deleteJson(regAdminUrl($general, "/{$registration->getKey()}"), ['reason' => 'CANCELLED'])->assertNoContent();
+});
+
 it('BR-030 evento de outro ministério é inexistente (404) para o líder, nas três rotas', function () {
     asStaff('LIDER_MINISTERIO');
     $foreign = regAdminEvent();

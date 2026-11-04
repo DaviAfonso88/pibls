@@ -37,6 +37,12 @@ const draftMessage = {
   title: `Rascunho ${RUN}`,
   slug: `rascunho-${RUN.toLowerCase()}`,
 };
+const linked = { edition: EDITION_BASE + 3, title: `Boletim por link ${RUN}` };
+const convertible = {
+  edition: EDITION_BASE + 4,
+  title: `Boletim convertido ${RUN}`,
+};
+const FLIPBOOK = "https://heyzine.com/flip-book/4954dbb36f.html";
 
 /** Um PDF verdadeiro (assinatura `%PDF-` e fim `%%EOF`) com o tamanho pedido: o servidor confere o conteúdo (BR-041). */
 function pdfOf(bytes: number): Buffer {
@@ -82,15 +88,17 @@ function tomorrowAt20h(): string {
   return `${day}T20:00`;
 }
 
-async function fillBulletin(
+async function fillBulletinText(
   page: Page,
   data: { edition: number; title: string },
-  pdf: { name: string; buffer: Buffer },
 ) {
   await page.goto("/admin/boletins/novo");
   await page.getByLabel("Edição nº").fill(String(data.edition));
   await page.getByLabel("Título").fill(data.title);
   await page.getByLabel(/Resumo/).fill(`Resumo de ${data.title}.`);
+}
+
+async function choosePdf(page: Page, pdf: { name: string; buffer: Buffer }) {
   await page.locator("#pdf").setInputFiles({
     name: pdf.name,
     mimeType: "application/pdf",
@@ -98,13 +106,26 @@ async function fillBulletin(
   });
 }
 
-async function deleteBulletinByTitle(page: Page, title: string) {
+async function fillBulletin(
+  page: Page,
+  data: { edition: number; title: string },
+  pdf: { name: string; buffer: Buffer },
+) {
+  await fillBulletinText(page, data);
+  await choosePdf(page, pdf);
+}
+
+async function editBulletinByTitle(page: Page, title: string) {
   await page.goto("/admin/boletins");
   await page
     .getByRole("table")
     .getByRole("row", { name: new RegExp(title) })
     .getByRole("link", { name: /^Editar/ })
     .click();
+}
+
+async function deleteBulletinByTitle(page: Page, title: string) {
+  await editBulletinByTitle(page, title);
   await page.getByRole("button", { name: "Excluir boletim" }).click();
   await page
     .getByRole("alertdialog")
@@ -399,6 +420,128 @@ test.describe("boletins e Palavra Viva @us5", () => {
         ),
       ),
     ).toEqual([]);
+  });
+
+  test("BR-084 a Comunicação publica um boletim por link e o público abre em nova aba, sem Baixar PDF", async ({
+    page,
+  }) => {
+    // O teste não depende do serviço de fora: a nova aba recebe esta resposta no lugar do flipbook
+    await page
+      .context()
+      .route(FLIPBOOK, (route) =>
+        route.fulfill({ contentType: "text/html", body: "<h1>Flipbook</h1>" }),
+      );
+
+    await signIn(page, "comunicacao@pibls.test");
+    await fillBulletinText(page, linked);
+
+    await page.getByRole("radio", { name: "Link" }).check();
+    await expect(page.locator("#pdf")).toHaveCount(0);
+
+    // O link inválido é recusado antes de sair do navegador
+    await page.getByLabel("Link do boletim").fill("http://heyzine.com/x");
+    await page.getByRole("button", { name: "Publicar agora" }).click();
+    await expect(
+      page.getByText("Informe um link completo, que comece com https://."),
+    ).toBeVisible();
+
+    await page.getByLabel("Link do boletim").fill(FLIPBOOK);
+    await page.getByRole("button", { name: "Publicar agora" }).click();
+    await expect(page.getByText("Boletim publicado!")).toBeVisible();
+
+    await page.goto(`/boletins?ano=${new Date().getFullYear()}`);
+    const card = page.getByRole("listitem").filter({ hasText: linked.title });
+    await expect(card).toBeVisible();
+
+    const read = card.getByRole("link", { name: /Ler boletim/ });
+    await expect(read).toHaveAttribute("href", FLIPBOOK);
+    await expect(read).toHaveAttribute("target", "_blank");
+    await expect(read).toHaveAttribute("rel", "noopener noreferrer");
+    await expect(card.getByRole("link", { name: /Baixar PDF/ })).toHaveCount(0);
+
+    const [popup] = await Promise.all([
+      page.waitForEvent("popup"),
+      read.click(),
+    ]);
+    await expect(popup).toHaveURL(FLIPBOOK);
+    await popup.close();
+
+    await deleteBulletinByTitle(page, linked.title);
+  });
+
+  test("BR-041 um PDF com `<?=` no conteúdo é aceito e servido como arquivo; BR-084 trocar por link apaga o PDF e enviar outro PDF volta ao arquivo", async ({
+    page,
+  }) => {
+    // A lista pública fica 60 s no cache do navegador. Com uma rota registrada, ele não usa esse cache, e o teste vê a troca
+    await page
+      .context()
+      .route("**/api/public/bulletins**", (route) => route.continue());
+
+    await signIn(page, "comunicacao@pibls.test");
+
+    // Os três bytes `<?=` aparecem por acaso no conteúdo comprimido de um PDF de verdade
+    const withTagBytes = Buffer.from(
+      pdfOf(4096).toString().replace("% x", "% <?= x"),
+    );
+    await fillBulletin(page, convertible, {
+      name: "com-bytes-comuns.pdf",
+      buffer: withTagBytes,
+    });
+    await page.getByRole("button", { name: "Publicar agora" }).click();
+    await expect(page.getByText("Boletim publicado!")).toBeVisible();
+
+    const publicCard = page
+      .getByRole("listitem")
+      .filter({ hasText: convertible.title });
+    const list = `/boletins?ano=${new Date().getFullYear()}`;
+    await page.goto(list);
+    const firstPdf =
+      (await publicCard
+        .getByRole("link", { name: /Ler boletim/ })
+        .getAttribute("href")) ?? "";
+    const served = await page.request.get(firstPdf);
+    expect(served.status()).toBe(200);
+    expect(served.headers()["content-type"]).toContain("application/pdf");
+    expect((await served.body()).equals(withTagBytes)).toBe(true);
+
+    // Do PDF para o link: um aviso antecipa, e o arquivo sai do disco
+    await editBulletinByTitle(page, convertible.title);
+    await page.getByRole("radio", { name: "Link" }).check();
+    await expect(
+      page.getByText("Ao salvar, o PDF atual é apagado"),
+    ).toBeVisible();
+    await page.getByLabel("Link do boletim").fill(FLIPBOOK);
+    await page.getByRole("button", { name: "Salvar alterações" }).click();
+    await expect(page).toHaveURL(/\/admin\/boletins$/);
+
+    await page.goto(list);
+    await expect(
+      publicCard.getByRole("link", { name: /Ler boletim/ }),
+    ).toHaveAttribute("href", FLIPBOOK);
+    await expect(
+      publicCard.getByRole("link", { name: /Baixar PDF/ }),
+    ).toHaveCount(0);
+    // O arquivo saiu do disco: o endereço antigo cai na página do site, e não mais no PDF
+    const removed = await page.request.get(firstPdf);
+    expect(removed.headers()["content-type"]).not.toContain("application/pdf");
+
+    // E do link de volta para um PDF
+    await editBulletinByTitle(page, convertible.title);
+    await page.getByRole("radio", { name: "Arquivo PDF" }).check();
+    await expect(page.getByText("Ao salvar, o link sai")).toBeVisible();
+    await choosePdf(page, { name: "de-volta.pdf", buffer: pdfOf(4096) });
+    await page.getByRole("button", { name: "Salvar alterações" }).click();
+    await expect(page).toHaveURL(/\/admin\/boletins$/);
+
+    await page.goto(list);
+    await expect(
+      publicCard.getByRole("link", { name: /Ler boletim/ }),
+    ).toHaveAttribute("href", /\/uploads\/boletins\/\d{4}\/[0-9a-f]{32}\.pdf$/);
+    await expect(
+      publicCard.getByRole("link", { name: /Baixar PDF/ }),
+    ).toBeVisible();
+
+    await deleteBulletinByTitle(page, convertible.title);
   });
 
   test("a Comunicação exclui o que criou (exclusão lógica) e o público deixa de ver", async ({

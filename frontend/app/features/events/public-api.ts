@@ -55,6 +55,9 @@ const detailParser = object({
   description: string,
   banner_url: nullish(string),
   has_minors: boolean,
+  asks_participant_name: boolean,
+  asks_phone: boolean,
+  asks_email: boolean,
   form_schema: array(formFieldParser),
 });
 
@@ -97,10 +100,10 @@ export function publicEventQuery(slug: string) {
   });
 }
 
-/** O corpo do envio, como a API espera (`RegistrationInput`). */
+/** O corpo do envio, como a API espera (`RegistrationInput`). Nome e telefone só vão quando o evento os pede. */
 export interface RegistrationPayload {
-  participant_name: string;
-  phone: string;
+  participant_name?: string;
+  phone?: string;
   email?: string;
   guardian_name?: string;
   guardian_phone?: string;

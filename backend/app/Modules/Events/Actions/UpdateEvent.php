@@ -34,9 +34,10 @@ final class UpdateEvent
     ) {}
 
     /**
-     * @param  array<string, mixed>  $changes  `title`, `slug`, `ministry_id`, `description`, `starts_at`, `ends_at`, `location`,
-     *                                         `max_spots`, `registration_deadline`, `has_minors`, `is_published` e `form_schema`
-     *                                         (um `FormSchema`); datas em UTC
+     * @param  array<string, mixed>  $changes  `title`, `slug`, `ministry_id` (nulo = sem ministério), `description`, `starts_at`,
+     *                                         `ends_at`, `location`, `max_spots`, `registration_deadline`, `has_minors`,
+     *                                         `asks_participant_name`, `asks_phone`, `asks_email`, `is_published` e
+     *                                         `form_schema` (um `FormSchema`); datas em UTC
      */
     public function __invoke(Event $event, array $changes, bool $confirmSchemaChange, User $actor): SavedEvent
     {

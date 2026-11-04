@@ -104,17 +104,20 @@ it('sem inscrições hoje, devolve lista vazia e total zero', function () {
         ->assertExactJson(['data' => [], 'meta' => ['total' => 0]]);
 });
 
-it('BR-030 o líder (.own) só vê as inscrições de hoje dos eventos do próprio ministério', function () {
+it('BR-030 ADR-025 o líder (.own) só vê as inscrições de hoje dos eventos do próprio ministério e dos gerais', function () {
     $leader = asStaff('LIDER_MINISTERIO');
     $own = Event::factory()->published()->create(['ministry_id' => $leader->ministry_id, 'title' => 'Do meu ministério']);
+    $general = Event::factory()->published()->create(['ministry_id' => null, 'title' => 'Geral']);
     $foreign = Event::factory()->published()->create(['title' => 'De outro ministério']);
     todayRegistration($own, 'Ana Souza', '2026-11-10 12:00:00');
+    todayRegistration($general, 'Carla Dias', '2026-11-10 12:30:00');
     todayRegistration($foreign, 'Bruno Lima', '2026-11-10 13:00:00');
 
     getJson('/api/admin/registrations/today')->assertOk()
-        ->assertJsonPath('meta.total', 1)
-        ->assertJsonCount(1, 'data')
-        ->assertJsonPath('data.0.event.title', 'Do meu ministério');
+        ->assertJsonPath('meta.total', 2)
+        ->assertJsonCount(2, 'data')
+        ->assertJsonPath('data.0.event.title', 'Geral')
+        ->assertJsonPath('data.1.event.title', 'Do meu ministério');
 });
 
 it('BR-075 o líder sem ministério vinculado recebe 403', function () {

@@ -28,7 +28,7 @@ final class CreateEvent
     ) {}
 
     /**
-     * @param  array{title: string, slug: string, ministry_id: int, description: string, starts_at: CarbonImmutable, ends_at: CarbonImmutable|null, location: string, max_spots: int|null, registration_deadline: CarbonImmutable|null, has_minors: bool, form_schema: FormSchema}  $data
+     * @param  array{title: string, slug: string, ministry_id: int|null, description: string, starts_at: CarbonImmutable, ends_at: CarbonImmutable|null, location: string, max_spots: int|null, registration_deadline: CarbonImmutable|null, has_minors: bool, asks_participant_name: bool, asks_phone: bool, asks_email: bool, form_schema: FormSchema}  $data
      */
     public function __invoke(array $data, bool $publish, User $actor): SavedEvent
     {
@@ -48,6 +48,9 @@ final class CreateEvent
                     'max_spots' => $data['max_spots'],
                     'registration_deadline' => $data['registration_deadline'],
                     'has_minors' => $data['has_minors'],
+                    'asks_participant_name' => $data['asks_participant_name'],
+                    'asks_phone' => $data['asks_phone'],
+                    'asks_email' => $data['asks_email'],
                     'form_schema' => $data['form_schema']->toArray(),
                     'is_published' => false,
                     'created_by' => $actor->getKey(),

@@ -51,7 +51,7 @@ final class AdminBulletinController
         return $this->respond($bulletin->load('updater'));
     }
 
-    /** `POST /api/admin/bulletins`: cadastra com o PDF (BR-040, BR-041). */
+    /** `POST /api/admin/bulletins`: cadastra com o PDF ou com o link externo (BR-040, BR-041, BR-084). */
     public function store(StoreBulletinRequest $request, CreateBulletin $create): JsonResponse
     {
         $bulletin = $create(
@@ -64,7 +64,7 @@ final class AdminBulletinController
         return $this->respond($bulletin->load('updater'), 201);
     }
 
-    /** `PATCH /api/admin/bulletins/{id}`: altera os metadados. */
+    /** `PATCH /api/admin/bulletins/{id}`: altera os metadados; com `external_url`, o link toma o lugar do PDF (BR-084). */
     public function update(UpdateBulletinRequest $request, Bulletin $bulletin, UpdateBulletin $update): JsonResponse
     {
         $bulletin = $update($bulletin, $request->changes(), $this->user($request));
@@ -72,7 +72,7 @@ final class AdminBulletinController
         return $this->respond($bulletin->load('updater'));
     }
 
-    /** `POST /api/admin/bulletins/{id}/pdf`: troca o PDF; o anterior é apagado do disco. */
+    /** `POST /api/admin/bulletins/{id}/pdf`: troca o PDF, ou o link, pelo arquivo novo; o PDF anterior é apagado do disco. */
     public function replacePdf(ReplaceBulletinPdfRequest $request, Bulletin $bulletin, ReplaceBulletinPdf $replace): JsonResponse
     {
         $bulletin = $replace($bulletin, $request->file('pdf'), $this->user($request));

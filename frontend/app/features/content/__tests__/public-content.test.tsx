@@ -83,6 +83,51 @@ describe("Boletins", () => {
     await expectNoA11yViolations(container);
   });
 
+  it("BR-084 o boletim por link só tem 'Ler boletim', que abre o endereço em nova aba", async () => {
+    const link = "https://heyzine.com/flip-book/4954dbb36f.html";
+    server.use(
+      http.get("*/api/public/bulletins", () =>
+        HttpResponse.json({
+          data: [bulletin(1932, { pdf_url: null, pdf_size_bytes: null, external_url: link })],
+          meta,
+        }),
+      ),
+    );
+    const { container } = renderRoute(Boletins, "/boletins");
+
+    const [item] = await screen.findAllByRole("listitem");
+    const card = item as HTMLElement;
+    const read = within(card).getByRole("link", { name: /Ler boletim/ });
+    expect(read).toHaveAttribute("href", link);
+    expect(read).toHaveAttribute("target", "_blank");
+    expect(read).toHaveAttribute("rel", "noopener noreferrer");
+    expect(read).toHaveAccessibleName(/abre em nova aba/);
+    expect(within(card).queryByRole("link", { name: /Baixar PDF/ })).toBeNull();
+
+    await expectNoA11yViolations(container);
+  });
+
+  it("BR-084 um endereço que não é http nunca vira link", async () => {
+    server.use(
+      http.get("*/api/public/bulletins", () =>
+        HttpResponse.json({
+          data: [
+            bulletin(1932, {
+              pdf_url: null,
+              pdf_size_bytes: null,
+              external_url: "javascript:alert(1)",
+            }),
+          ],
+          meta,
+        }),
+      ),
+    );
+    renderRoute(Boletins, "/boletins");
+
+    const [item] = await screen.findAllByRole("listitem");
+    expect(within(item as HTMLElement).queryByRole("link")).toBeNull();
+  });
+
   it("filtra por ano e mês, e o filtro mora na URL", async () => {
     const requested: string[] = [];
     server.use(
@@ -184,7 +229,7 @@ describe("Boletins", () => {
 });
 
 describe("Palavra Viva", () => {
-  it("destaca a mais recente (com a miniatura do vídeo) e lista as anteriores", async () => {
+  it("mostra cada mensagem num cartão, sem destaque nem 'Mensagens anteriores'", async () => {
     server.use(
       http.get("*/api/public/palavra-viva", () =>
         HttpResponse.json({
@@ -202,36 +247,98 @@ describe("Palavra Viva", () => {
     );
     const { container } = renderRoute(PalavraViva, "/palavra-viva");
 
-    const featured = await screen.findByRole("link", { name: /Título graca/ });
-    expect(featured).toHaveAttribute("href", "/palavra-viva/graca");
-    expect(within(featured).getByText("Mais recente · 16/10/2026")).toBeVisible();
-    expect(featured.querySelector("img")).toHaveAttribute(
-      "src",
-      "https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg",
-    );
+    const first = await screen.findByRole("link", { name: /Título graca/ });
+    expect(first).toHaveAttribute("href", "/palavra-viva/graca");
+    expect(within(first).getByText("16/10/2026")).toBeVisible();
+    expect(within(first).getByText("Ler mensagem")).toBeVisible();
 
-    const previous = screen.getByRole("heading", { level: 2, name: "Mensagens anteriores" });
-    const list = previous.parentElement?.querySelector("ul");
-    expect(within(list as HTMLElement).getAllByRole("listitem")).toHaveLength(2);
-    expect(within(list as HTMLElement).getByText("Com vídeo")).toBeVisible();
+    const list = screen.getByRole("list");
+    expect(within(list).getAllByRole("listitem")).toHaveLength(3);
+    expect(within(list).getAllByText("Com vídeo")).toHaveLength(2);
+    expect(screen.queryByText(/Mais recente/)).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Mensagens anteriores" })).toBeNull();
+    expect(container.querySelector("img")).toBeNull();
+    expect(screen.getByRole("searchbox", { name: "Pesquisar mensagens" })).toHaveValue("");
 
     await expectNoA11yViolations(container);
   });
 
-  it("na segunda página não há destaque: todas as mensagens vão para a lista", async () => {
+  it("busca: manda o termo à API, guarda na URL, diz quantas achou e oferece limpar", async () => {
+    const searches: Array<string | null> = [];
+    server.use(
+      http.get("*/api/public/palavra-viva", ({ request }) => {
+        const term = new URL(request.url).searchParams.get("q");
+        searches.push(term);
+        const data = term === null ? [post("graca"), post("paz")] : [post("graca")];
+        return HttpResponse.json({
+          data,
+          meta: { page: 1, per_page: 10, total: data.length, last_page: 1 },
+        });
+      }),
+    );
+    const user = userEvent.setup();
+    const { router, container } = renderRoute(PalavraViva, "/palavra-viva");
+    await screen.findByRole("link", { name: /Título paz/ });
+
+    await user.type(
+      screen.getByRole("searchbox", { name: "Pesquisar mensagens" }),
+      "  graça   divina ",
+    );
+    await user.click(screen.getByRole("button", { name: "Buscar" }));
+
+    expect(await screen.findByText("1 mensagem encontrada para “graça divina”.")).toBeVisible();
+    expect(screen.getByRole("status")).toHaveTextContent("1 mensagem encontrada");
+    expect(searches).toEqual([null, "graça divina"]);
+    expect(router.state.location.search).toBe("?busca=gra%C3%A7a+divina");
+    expect(screen.queryByRole("link", { name: /Título paz/ })).toBeNull();
+    expect(screen.getByRole("link", { name: "Limpar busca" })).toHaveAttribute(
+      "href",
+      "/palavra-viva",
+    );
+    await expectNoA11yViolations(container);
+  });
+
+  it("busca sem resultado diz o que buscou e oferece ver todas as mensagens", async () => {
     server.use(
       http.get("*/api/public/palavra-viva", () =>
-        HttpResponse.json({
-          data: [post("a"), post("b")],
-          meta: { page: 2, per_page: 10, total: 12, last_page: 2 },
-        }),
+        HttpResponse.json({ data: [], meta: { page: 1, per_page: 10, total: 0, last_page: 1 } }),
       ),
     );
-    renderRoute(PalavraViva, "/palavra-viva?pagina=2");
+    renderRoute(PalavraViva, "/palavra-viva?busca=jejum");
 
-    await screen.findByRole("heading", { level: 2, name: "Mensagens anteriores" });
-    expect(screen.queryByText(/Mais recente/)).toBeNull();
-    expect(screen.getAllByRole("listitem")).toHaveLength(2 + 0);
+    expect(
+      await screen.findByRole("heading", { name: "Nenhuma mensagem encontrada para “jejum”." }),
+    ).toBeVisible();
+    expect(screen.getByRole("searchbox", { name: "Pesquisar mensagens" })).toHaveValue("jejum");
+    expect(screen.getByRole("link", { name: "Ver todas as mensagens" })).toHaveAttribute(
+      "href",
+      "/palavra-viva",
+    );
+  });
+
+  it("a paginação mantém a busca na URL", async () => {
+    const pages: Array<string | null> = [];
+    server.use(
+      http.get("*/api/public/palavra-viva", ({ request }) => {
+        const url = new URL(request.url);
+        pages.push(`${url.searchParams.get("q")}:${url.searchParams.get("page")}`);
+        return HttpResponse.json({
+          data: [post("a"), post("b")],
+          meta: { page: 2, per_page: 10, total: 25, last_page: 3 },
+        });
+      }),
+    );
+    renderRoute(PalavraViva, "/palavra-viva?busca=f%C3%A9&pagina=2");
+
+    expect(await screen.findByRole("link", { name: "Próxima" })).toHaveAttribute(
+      "href",
+      "/palavra-viva?busca=f%C3%A9&pagina=3",
+    );
+    expect(screen.getByRole("link", { name: "Anterior" })).toHaveAttribute(
+      "href",
+      "/palavra-viva?busca=f%C3%A9",
+    );
+    expect(pages).toEqual(["fé:2"]);
   });
 
   it("estado vazio", async () => {

@@ -290,6 +290,35 @@ describe('público', function () {
         expect(getJson('/api/public/palavra-viva')->assertOk()->json('data.*.slug'))->toBe(['no-ar']);
     });
 
+    it('busca pelo título, pelo resumo ou pelo texto, sem diferenciar maiúsculas nem acentos', function () {
+        PalavraVivaPost::factory()->create(['slug' => 'no-titulo', 'title' => 'O poder da Oração', 'published_at' => now()->subDays(3)]);
+        PalavraVivaPost::factory()->create(['slug' => 'no-texto', 'title' => 'Domingo', 'body' => '<p>Uma vida de oração.</p>', 'published_at' => now()->subDays(2)]);
+        PalavraVivaPost::factory()->create(['slug' => 'outra', 'title' => 'Esperança', 'body' => '<p>Fé.</p>', 'published_at' => now()->subDay()]);
+
+        $response = getJson('/api/public/palavra-viva?'.http_build_query(['q' => '  ORACAO ']))->assertOk();
+
+        expect($response->json('data.*.slug'))->toBe(['no-texto', 'no-titulo'])
+            ->and($response->json('meta.total'))->toBe(2);
+        expect(getJson('/api/public/palavra-viva?q=')->assertOk()->json('meta.total'))->toBe(3);
+    });
+
+    it('BR-042 a busca também não acha a mensagem agendada nem a excluída', function () {
+        PalavraVivaPost::factory()->create(['slug' => 'no-ar', 'title' => 'Graça', 'published_at' => now()->subDay()]);
+        PalavraVivaPost::factory()->scheduled()->create(['slug' => 'agendada', 'title' => 'Graça futura']);
+        PalavraVivaPost::factory()->trashed()->create(['slug' => 'excluida', 'title' => 'Graça antiga', 'published_at' => now()->subDay()]);
+
+        expect(getJson('/api/public/palavra-viva?q=graça')->assertOk()->json('data.*.slug'))->toBe(['no-ar']);
+    });
+
+    it('trata % e _ da busca como texto, e recusa busca com mais de 120 caracteres', function () {
+        PalavraVivaPost::factory()->create(['slug' => 'cem', 'title' => '100% de entrega', 'published_at' => now()->subDay()]);
+        PalavraVivaPost::factory()->create(['slug' => 'outra', 'title' => 'Paz', 'published_at' => now()->subDay()]);
+
+        expect(getJson('/api/public/palavra-viva?q=%25')->assertOk()->json('data.*.slug'))->toBe(['cem']);
+        expect(getJson('/api/public/palavra-viva?q=_')->assertOk()->json('data'))->toBe([]);
+        getJson('/api/public/palavra-viva?q='.str_repeat('a', 121))->assertUnprocessable()->assertFieldErrors(['q']);
+    });
+
     it('mostra a mensagem pelo endereço, com o corpo, e dá 404 para agendada, excluída ou inexistente', function () {
         PalavraVivaPost::factory()->create(['slug' => 'no-ar', 'body' => '<p>Corpo</p>', 'published_at' => now()->subDay()]);
         PalavraVivaPost::factory()->scheduled()->create(['slug' => 'agendada']);

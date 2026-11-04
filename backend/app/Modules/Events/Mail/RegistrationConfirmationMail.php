@@ -41,7 +41,9 @@ final class RegistrationConfirmationMail extends BaseMail
         return [
             'heading' => $this->subjectLine(),
             'lines' => [
-                "Olá, {$this->registration->participant_name}. Recebemos a sua inscrição em {$event->title}.",
+                // O evento pode não pedir o nome (ADR-025): aí a saudação fica sem ele
+                ($this->registration->participant_name === null ? 'Olá.' : "Olá, {$this->registration->participant_name}.")
+                    ." Recebemos a sua inscrição em {$event->title}.",
                 'Quando: '.$event->starts_at->copy()->timezone('America/Sao_Paulo')->format('d/m/Y \à\s H\hi').'.',
                 "Onde: {$event->location}.",
                 'Se precisar corrigir ou cancelar a inscrição, fale com a secretaria da igreja.',

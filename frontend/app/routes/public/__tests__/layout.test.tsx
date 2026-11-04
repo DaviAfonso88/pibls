@@ -213,6 +213,11 @@ describe("layout público", () => {
     await waitFor(() => expect(queryClient.isFetching()).toBe(0));
     expect(within(footer).getByRole("link", { name: "Como chegar" })).toBeVisible();
     expect(within(footer).getByRole("link", { name: "Contato" })).toBeVisible();
+    // O site da Juventude é conteúdo fixo, não vem das configurações
+    expect(within(footer).getByRole("link", { name: /Juventude Salt/ })).toHaveAttribute(
+      "href",
+      "https://juventude-salt.vercel.app/",
+    );
     expect(screen.queryByRole("link", { name: "Eventos" })).not.toBeInTheDocument();
     await expectNoA11yViolations(container);
   });

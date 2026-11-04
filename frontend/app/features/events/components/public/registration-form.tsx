@@ -62,7 +62,15 @@ export default function RegistrationForm({
   const fields = event.form_schema;
   const hasMinors = event.has_minors;
   const health = hasHealthQuestion(fields);
-  const schema = useMemo(() => buildRegistrationSchema(fields, hasMinors), [fields, hasMinors]);
+  const { asks_participant_name: asksName, asks_phone: asksPhone, asks_email: asksEmail } = event;
+  const asks = useMemo(
+    () => ({ asks_participant_name: asksName, asks_phone: asksPhone, asks_email: asksEmail }),
+    [asksName, asksPhone, asksEmail],
+  );
+  const schema = useMemo(
+    () => buildRegistrationSchema(fields, hasMinors, asks),
+    [fields, hasMinors, asks],
+  );
   const form = useForm<RegistrationValues>({
     resolver: zodResolver(schema),
     defaultValues: {
@@ -98,10 +106,13 @@ export default function RegistrationForm({
     try {
       const receipt = await registerForEvent(
         event.slug,
-        toRegistrationPayload(values, fields, hasMinors),
+        toRegistrationPayload(values, fields, hasMinors, asks),
       );
       void queryClient.invalidateQueries({ queryKey: ["public", "events"] });
-      onRegistered({ receipt, participantName: values.participant_name.trim() });
+      onRegistered({
+        receipt,
+        participantName: asksName ? values.participant_name.trim() : "",
+      });
     } catch (error) {
       setGeneral(applyApiErrors(error, form.setError, fieldNames).general);
 
@@ -123,27 +134,35 @@ export default function RegistrationForm({
         {text.registration}
       </h2>
 
-      <FormField
-        id="participant_name"
-        label={text.fullName}
-        error={errors.participant_name?.message}
-      >
-        {(control) => <Input {...control} autoComplete="name" {...register("participant_name")} />}
-      </FormField>
-      <FormField id="phone" label={text.whatsapp} error={errors.phone?.message}>
-        {(control) => <PhoneInput {...control} {...register("phone")} />}
-      </FormField>
-      <FormField
-        id="email"
-        label={text.email}
-        optionalLabel={text.optional}
-        hint={text.emailHint}
-        error={errors.email?.message}
-      >
-        {(control) => (
-          <Input {...control} type="email" autoComplete="email" {...register("email")} />
-        )}
-      </FormField>
+      {asksName ? (
+        <FormField
+          id="participant_name"
+          label={text.fullName}
+          error={errors.participant_name?.message}
+        >
+          {(control) => (
+            <Input {...control} autoComplete="name" {...register("participant_name")} />
+          )}
+        </FormField>
+      ) : null}
+      {asksPhone ? (
+        <FormField id="phone" label={text.phone} error={errors.phone?.message}>
+          {(control) => <PhoneInput {...control} {...register("phone")} />}
+        </FormField>
+      ) : null}
+      {asksEmail ? (
+        <FormField
+          id="email"
+          label={text.email}
+          optionalLabel={text.optional}
+          hint={text.emailHint}
+          error={errors.email?.message}
+        >
+          {(control) => (
+            <Input {...control} type="email" autoComplete="email" {...register("email")} />
+          )}
+        </FormField>
+      ) : null}
 
       {fields.map((field) => (
         <AnswerField key={field.key} field={field} form={form} />

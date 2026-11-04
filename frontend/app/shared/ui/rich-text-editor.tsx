@@ -175,9 +175,11 @@ export function RichTextEditor({
     },
   });
 
-  // Acompanha o valor que vem de fora, sem disparar `onChange` (evita laço)
+  // Acompanha o valor que vem de fora, sem disparar `onChange` (evita laço). O `useEditor` destrói o editor inicial se o
+  // componente demora mais de 1 ms para montar (Suspense, abrir a edição direto pelo endereço) e cria outro, já com o
+  // valor atual; até lá a instância destruída não tem esquema e o `getHTML` quebraria a tela.
   useEffect(() => {
-    if (!editor) return;
+    if (!editor || editor.isDestroyed) return;
     const current = editor.isEmpty ? "" : editor.getHTML();
     if (current !== value) editor.commands.setContent(value, { emitUpdate: false });
   }, [editor, value]);
@@ -188,24 +190,27 @@ export function RichTextEditor({
   }, [linkOpen]);
 
   useEffect(() => {
-    editor?.setEditable(!disabled);
+    if (editor && !editor.isDestroyed) editor.setEditable(!disabled);
   }, [editor, disabled]);
 
   const state = useEditorState({
     editor,
-    selector: ({ editor: current }) => ({
-      bold: current?.isActive("bold") ?? false,
-      italic: current?.isActive("italic") ?? false,
-      h2: current?.isActive("heading", { level: 2 }) ?? false,
-      h3: current?.isActive("heading", { level: 3 }) ?? false,
-      bullet: current?.isActive("bulletList") ?? false,
-      ordered: current?.isActive("orderedList") ?? false,
-      quote: current?.isActive("blockquote") ?? false,
-      link: current?.isActive("link") ?? false,
-    }),
+    selector: ({ editor: current }) => {
+      const live = current && !current.isDestroyed ? current : null;
+      return {
+        bold: live?.isActive("bold") ?? false,
+        italic: live?.isActive("italic") ?? false,
+        h2: live?.isActive("heading", { level: 2 }) ?? false,
+        h3: live?.isActive("heading", { level: 3 }) ?? false,
+        bullet: live?.isActive("bulletList") ?? false,
+        ordered: live?.isActive("orderedList") ?? false,
+        quote: live?.isActive("blockquote") ?? false,
+        link: live?.isActive("link") ?? false,
+      };
+    },
   });
 
-  if (!editor) return null;
+  if (!editor || editor.isDestroyed) return null;
 
   const activeEditor = editor;
   const run = (command: () => boolean) => {

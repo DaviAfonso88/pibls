@@ -15,7 +15,7 @@ import { Spinner } from "~/shared/ui/spinner";
 import { adminEventQuery } from "../../admin-api";
 import { eventAdminMessages } from "../../admin-messages";
 import { pdfFilename, renderRegistrationsPdf } from "../../pdf-export";
-import { registrationColumns } from "../../registration-columns";
+import { formatRegisteredAt, registrationColumns } from "../../registration-columns";
 import {
   cancelRegistration,
   fetchAllRegistrations,
@@ -195,7 +195,10 @@ export function RegistrationsPage({ eventId, canCancel }: { eventId: number; can
           type="button"
           variant="outline"
           size="lg"
-          aria-label={text.cancelOf(registration.participant_name)}
+          aria-label={text.cancelOf(
+            registration.participant_name ?? null,
+            formatRegisteredAt(registration.created_at),
+          )}
           onClick={() => setTarget(registration)}
           className="border-destructive/30 font-bold text-destructive"
         >
@@ -356,7 +359,7 @@ export function RegistrationsPage({ eventId, canCancel }: { eventId: number; can
       {target === null ? null : (
         <CancelRegistrationDialog
           key={target.id}
-          name={target.participant_name}
+          name={target.participant_name ?? null}
           open
           onOpenChange={(open) => {
             if (!open) setTarget(null);

@@ -2,10 +2,12 @@ import { useHomeHighlights } from "~/features/content/api";
 import {
   HighlightsSection,
   HomeHero,
+  InstagramSection,
   LiveSection,
   NoticesSection,
-  PrayerSection,
   ScheduleSection,
+  VisitorSection,
+  YouthSection,
 } from "~/features/content/components/home-sections";
 import { messages } from "~/shared/messages";
 import { pageMeta } from "~/shared/seo/meta";
@@ -40,8 +42,10 @@ export default function Home() {
         <>
           <NoticesSection settings={settings} />
           <ScheduleSection schedule={settings?.schedule} isPending={isPending} />
+          <VisitorSection />
           <LiveSection settings={settings} />
-          <PrayerSection />
+          <YouthSection schedule={settings?.schedule} />
+          <InstagramSection socialLinks={settings?.social_links} />
           <HighlightsSection
             highlights={highlights}
             eventsEnabled={settings?.features.events ?? false}

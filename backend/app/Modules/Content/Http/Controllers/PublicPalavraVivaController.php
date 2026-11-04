@@ -20,7 +20,7 @@ final class PublicPalavraVivaController
 {
     public function index(PageRequest $request, ListPublicPalavraViva $list): JsonResponse
     {
-        $posts = $list($request->integer('page', 1));
+        $posts = $list($request->integer('page', 1), $request->filled('q') ? (string) $request->input('q') : null);
 
         return response()
             ->json([

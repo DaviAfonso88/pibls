@@ -5,15 +5,19 @@ import { STALE_TIME } from "~/shared/lib/query-client";
 
 const pageMeta = object({ page: number, per_page: number, total: number, last_page: number });
 
-/** `BulletinPublic` (contracts/openapi.yaml). O PDF é servido direto pelo Apache de `/uploads/`. */
+/**
+ * `BulletinPublic` (contracts/openapi.yaml). O PDF é servido direto pelo Apache de `/uploads/`. Vem um de cada vez: ou os
+ * campos do PDF, ou `external_url` (BR-084).
+ */
 const bulletinParser = object({
   id: number,
   edition_number: number,
   reference_date: string,
   title: string,
   summary_text: nullish(string),
-  pdf_url: string,
-  pdf_size_bytes: number,
+  pdf_url: nullish(string),
+  pdf_size_bytes: nullish(number),
+  external_url: nullish(string),
 });
 
 export type PublicBulletin = ReturnType<typeof bulletinParser>;
@@ -47,6 +51,14 @@ export function bulletinsQuery(filters: BulletinFilters) {
   });
 }
 
+/**
+ * O endereço de uma mensagem. Mora aqui, e não na lista, para a página da mensagem não carregar a lista inteira
+ * (orçamento de bundle, RNF-05).
+ */
+export function postPath(slug: string): string {
+  return `/palavra-viva/${slug}`;
+}
+
 /** `PalavraVivaSummary`: a lista mostra o resumo (`excerpt`), nunca o corpo. */
 const postSummaryParser = object({
   id: number,
@@ -62,13 +74,14 @@ export type PostSummary = ReturnType<typeof postSummaryParser>;
 
 const postsEnvelope = schema(object({ data: array(postSummaryParser), meta: pageMeta }));
 
-export function postsQuery(page: number) {
+/** A lista pública, de 10 em 10; `search` filtra por título, resumo ou texto (vazio = todas). */
+export function postsQuery(page: number, search = "") {
   return queryOptions({
-    queryKey: ["public", "palavra-viva", "list", page] as const,
+    queryKey: ["public", "palavra-viva", "list", page, search] as const,
     queryFn: async ({ signal }) =>
       postsEnvelope.parse(
         await api.get<unknown>("/api/public/palavra-viva", {
-          query: { page: page > 1 ? page : undefined },
+          query: { page: page > 1 ? page : undefined, q: search !== "" ? search : undefined },
           signal,
         }),
       ),

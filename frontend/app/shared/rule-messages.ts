@@ -22,6 +22,7 @@ export const ruleMessages = {
   formatRemoved: "Parte da formatação não é permitida e foi removida.", // BR-046
   pdfType: "O arquivo precisa ser um PDF.", // BR-041
   pdfSize: "O PDF pode ter no máximo 10 MB.", // BR-041
+  bulletinLink: "Informe um link completo, que comece com https://.", // BR-084
   qrImage: "O QR Code precisa ser PNG ou JPEG, com até 1 MB.", // BR-045
   pixPassword: "Senha incorreta. Os dados PIX não foram alterados.", // BR-060
   // BR-063

@@ -16,6 +16,7 @@ use Illuminate\Auth\Access\Response;
  * - `eventos.write` vale para qualquer ministério; `eventos.write.own`, só para o do usuário. Sem ministério vinculado, a
  *   permissão `.own` não concede nada (BR-075, 403).
  * - Evento de outro ministério, para quem só tem `.own`, "não existe": 404 (BR-030).
+ * - Evento sem ministério é geral (ADR-025): quem tem `.own` (com ministério vinculado) o vê e gerencia como os do seu.
  * - Quem não tem nenhuma permissão de escrita de eventos recebe 403.
  */
 final class EventPolicy
@@ -65,13 +66,17 @@ final class EventPolicy
             : Response::deny(__('errors.forbidden'));
     }
 
-    /** Passar um evento para outro ministério: precisa poder escrever nos dois. */
-    public function moveTo(User $user, int $ministryId): Response
+    /** Passar um evento para outro ministério, ou deixá-lo sem ministério (`null`): precisa poder escrever nos dois. */
+    public function moveTo(User $user, ?int $ministryId): Response
     {
         return $this->canWriteIn($user, $ministryId) ? Response::allow() : Response::deny(__('errors.forbidden'));
     }
 
-    private function canWriteIn(User $user, int $ministryId): bool
+    /**
+     * Ministério nulo = evento geral (ADR-025): o `PermissionGate` o libera para quem tem `.own` com ministério vinculado
+     * (sem ministério, `.own` continua sem conceder nada, BR-075).
+     */
+    private function canWriteIn(User $user, ?int $ministryId): bool
     {
         return $this->gate->allows($user, PermissionKey::EventosWrite)
             || $this->gate->allows($user, PermissionKey::EventosWriteOwn, $ministryId);

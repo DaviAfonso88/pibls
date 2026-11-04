@@ -125,7 +125,7 @@ const consent = (page: Page) =>
 
 async function fillParticipant(page: Page, name: string, number = phone()) {
   await page.getByLabel("Nome completo").fill(name);
-  await page.getByLabel("WhatsApp", { exact: true }).fill(number);
+  await page.getByLabel("Telefone", { exact: true }).fill(number);
 }
 
 test.describe("inscrição pública em eventos @us10", () => {

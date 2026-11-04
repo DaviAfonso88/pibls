@@ -26,18 +26,25 @@ export function PageHeader({
   className?: string;
 }) {
   return (
-    <section className={cn("border-b border-border bg-muted pt-8 pb-6", className)}>
+    <section
+      className={cn(
+        "bg-linear-to-b from-muted to-background pt-8 pb-6 md:pt-14 md:pb-8",
+        className,
+      )}
+    >
       <div className="container">
-        <div className={cn("flex flex-col gap-4", narrow && "mx-auto max-w-[40rem]")}>
-          <div className="flex flex-col gap-2">
+        <div className={cn("flex flex-col gap-5", narrow && "mx-auto max-w-[40rem]")}>
+          <div className="flex flex-col gap-2.5">
             {eyebrow ? (
               <p className="m-0 text-sm font-bold tracking-wider text-primary uppercase">
                 {eyebrow}
               </p>
             ) : null}
-            <h1 className="m-0 text-balance">{title}</h1>
+            <h1 className="m-0 text-balance tracking-tight md:text-[2.75rem] md:leading-[1.1]">
+              {title}
+            </h1>
             {intro ? (
-              <p className="m-0 max-w-prose text-lg text-muted-foreground">{intro}</p>
+              <p className="m-0 max-w-prose text-lg text-pretty text-muted-foreground">{intro}</p>
             ) : null}
           </div>
           {children}

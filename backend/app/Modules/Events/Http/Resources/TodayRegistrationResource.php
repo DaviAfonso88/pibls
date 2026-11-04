@@ -30,10 +30,10 @@ final class TodayRegistrationResource extends JsonResource
         ];
     }
 
-    /** "Pedro Henrique Alves" → "Pedro A."; nome único fica como está. */
-    public static function abbreviate(string $name): string
+    /** "Pedro Henrique Alves" → "Pedro A."; nome único fica como está; sem nome (ADR-025), texto vazio. */
+    public static function abbreviate(?string $name): string
     {
-        $parts = preg_split('/\s+/u', trim($name), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        $parts = preg_split('/\s+/u', trim((string) $name), -1, PREG_SPLIT_NO_EMPTY) ?: [];
 
         if (count($parts) < 2) {
             return $parts[0] ?? '';

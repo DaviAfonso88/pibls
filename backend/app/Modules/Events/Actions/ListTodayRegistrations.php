@@ -14,7 +14,8 @@ use Illuminate\Support\Collection;
 
 /**
  * As inscrições feitas hoje (dia de Brasília), das mais novas para as mais antigas, para o Início do painel. Quem lê
- * inscritos de qualquer ministério vê todas; quem só tem `.own`, as dos eventos do próprio ministério (BR-030).
+ * inscritos de qualquer ministério vê todas; quem só tem `.own`, as dos eventos do próprio ministério e dos gerais, sem
+ * ministério (BR-030, ADR-025).
  */
 final class ListTodayRegistrations
 {
@@ -50,6 +51,9 @@ final class ListTodayRegistrations
      */
     private function ownMinistry(Builder $query, User $user): void
     {
-        $query->whereHas('event', fn (Builder $event) => $event->where('ministry_id', $user->ministry_id));
+        // O próprio ministério e os eventos gerais, sem ministério (ADR-025)
+        $query->whereHas('event', fn (Builder $event) => $event->where(
+            fn (Builder $own) => $own->where('ministry_id', $user->ministry_id)->orWhereNull('ministry_id'),
+        ));
     }
 }

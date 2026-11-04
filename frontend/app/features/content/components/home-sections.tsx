@@ -1,7 +1,9 @@
 import { homeMessages } from "../messages";
 import {
+  ArrowUpRightIcon,
   BookOpenIcon,
   CalendarIcon,
+  CheckIcon,
   ChevronRightIcon,
   FileTextIcon,
   HandHeartIcon,
@@ -15,17 +17,19 @@ import { Link } from "react-router";
 import { institution } from "~/content/institution";
 import { photos } from "~/content/photos";
 import { formatDate, formatIsoDate, formatScheduleTime } from "~/shared/format";
-import { cn } from "~/shared/lib/utils";
 import { messages } from "~/shared/messages";
 import { safeHttpUrl, whatsappUrl } from "~/shared/site/links";
-import { scheduleDetail, shortDay, sortSchedule } from "~/shared/site/schedule";
+import { scheduleDetail, shortDay, sortSchedule, type ScheduleItem } from "~/shared/site/schedule";
 import type { PublicSettings } from "~/shared/site/settings";
 import { buttonClassName } from "~/shared/ui/button-variants";
 import { Photo } from "~/shared/ui/photo";
 import { Skeleton } from "~/shared/ui/skeleton";
 import type { HomeHighlights } from "../api";
 
-const sectionTitle = "m-0 text-2xl leading-tight";
+const sectionTitle = "m-0 text-2xl leading-tight tracking-tight md:text-3xl";
+const eyebrow = "m-0 text-sm font-bold tracking-wider text-primary uppercase";
+// Seções sobre o fundo branco; as faixas coloridas (horários) têm mais respiro
+const plainSection = "py-8 md:py-10";
 
 function ExternalAnchor({
   href,
@@ -44,6 +48,18 @@ function ExternalAnchor({
   );
 }
 
+/** O dia abreviado e a hora de um item do quadro, no selo que abre cada linha de horário. */
+function ScheduleBadge({ item }: { item: ScheduleItem }) {
+  return (
+    <div className="flex w-[72px] flex-none flex-col items-center rounded-lg bg-info px-1 py-2 leading-tight text-info-foreground">
+      <span className="text-[13px] font-bold tracking-wide uppercase">{shortDay(item.day)}</span>
+      <span className="text-[19px] font-extrabold tabular-nums">
+        {formatScheduleTime(item.time)}
+      </span>
+    </div>
+  );
+}
+
 /**
  * Boas-vindas e as duas chamadas principais: planejar a visita e assistir ao vivo (design: Main, seção inicial). O texto
  * e a foto da congregação dividem a faixa e, em telas estreitas, a foto desce para depois dos botões.
@@ -52,22 +68,31 @@ export function HomeHero() {
   const since = new Date(institution.foundedOn).getUTCFullYear();
 
   return (
-    <section aria-labelledby="boas-vindas" className="border-b border-border bg-muted pt-8 pb-10">
-      <div className="container flex flex-wrap items-center gap-x-8 gap-y-6">
-        <div className="flex min-w-[min(100%,21rem)] flex-[1_1_21rem] flex-col gap-4">
-          <p className="m-0 text-sm font-bold tracking-wider text-primary uppercase">
+    <section
+      aria-labelledby="boas-vindas"
+      className="bg-linear-to-b from-muted to-background pt-8 pb-10 md:pt-16 md:pb-14"
+    >
+      <div className="container grid items-center gap-8 md:grid-cols-[1.1fr_1fr] md:gap-12">
+        <div className="flex flex-col items-start gap-5">
+          <p className="m-0 rounded-full bg-background px-3.5 py-1.5 text-[13px] font-bold tracking-wider text-primary uppercase ring-1 ring-border">
             {homeMessages.homeEyebrow(since)}
           </p>
-          <h1 id="boas-vindas" className="m-0 text-balance">
+          {/* `text-pretty`, e não o `balance` da base: equilibrar as linhas quebrava "bem-vindo" no hífen */}
+          <h1
+            id="boas-vindas"
+            className="m-0 tracking-tight text-pretty md:text-5xl md:leading-[1.08]"
+          >
             {homeMessages.homeTitle}
           </h1>
-          <p className="m-0 text-lg text-foreground/80">{homeMessages.homeLead}</p>
-          <div className="mt-1 flex flex-wrap gap-3">
+          <p className="m-0 max-w-xl text-lg text-pretty text-foreground/80 md:text-xl">
+            {homeMessages.homeLead}
+          </p>
+          <div className="mt-1 flex w-full flex-wrap gap-3">
             <Link
               to="/como-chegar"
               className={buttonClassName({
                 size: "lg",
-                className: "min-w-52 flex-1 px-5 font-bold",
+                className: "min-w-52 flex-1 px-5 font-bold sm:flex-none",
               })}
             >
               <MapPinIcon data-icon="inline-start" aria-hidden="true" />
@@ -78,7 +103,7 @@ export function HomeHero() {
               className={buttonClassName({
                 variant: "outline",
                 size: "lg",
-                className: "min-w-52 flex-1 px-5 font-bold",
+                className: "min-w-52 flex-1 px-5 font-bold sm:flex-none",
               })}
             >
               <PlayCircleIcon data-icon="inline-start" aria-hidden="true" />
@@ -89,8 +114,8 @@ export function HomeHero() {
         <Photo
           photo={photos.welcome}
           priority
-          sizes="(min-width: 1152px) 540px, (min-width: 704px) calc(50vw - 3rem), calc(100vw - 2rem)"
-          className="aspect-3/2 min-w-[min(100%,21rem)] flex-[1_1_21rem] rounded-2xl"
+          sizes="(min-width: 1152px) 496px, (min-width: 768px) calc(48vw - 2.5rem), calc(100vw - 2rem)"
+          className="aspect-3/2 rounded-3xl shadow-xl shadow-footer/15"
           imgClassName="object-[50%_40%]"
         />
       </div>
@@ -105,14 +130,14 @@ export function NoticesSection({ settings }: { settings: PublicSettings | undefi
   if (!campaign && !supper) return null;
 
   return (
-    <section aria-labelledby="avisos" className="py-10">
-      <div className="container flex flex-col gap-4">
+    <section aria-labelledby="avisos" className={plainSection}>
+      <div className="container flex flex-col gap-5">
         <h2 id="avisos" className={sectionTitle}>
           {homeMessages.notices}
         </h2>
         <div className="flex flex-wrap gap-4">
           {campaign ? (
-            <article className="flex min-w-[min(100%,21rem)] flex-[2_1_21rem] flex-col gap-3 rounded-2xl bg-footer p-6 text-footer-text">
+            <article className="flex min-w-[min(100%,21rem)] flex-[2_1_21rem] flex-col gap-3 rounded-3xl bg-footer p-6 text-footer-text md:p-8">
               <p className="m-0 text-[13px] font-bold tracking-widest text-highlight uppercase">
                 {homeMessages.campaign}
               </p>
@@ -136,7 +161,7 @@ export function NoticesSection({ settings }: { settings: PublicSettings | undefi
             </article>
           ) : null}
           {supper ? (
-            <article className="flex min-w-[min(100%,16rem)] flex-1 flex-col gap-2.5 rounded-2xl border border-info-border bg-info p-6 text-info-foreground">
+            <article className="flex min-w-[min(100%,16rem)] flex-1 flex-col gap-2.5 rounded-3xl border border-info-border bg-info p-6 text-info-foreground md:p-8">
               <div className="flex items-center gap-2.5">
                 <CalendarIcon aria-hidden="true" className="size-[22px] flex-none" />
                 <h3 className="m-0 text-xl leading-tight">{homeMessages.lordsSupper}</h3>
@@ -164,10 +189,10 @@ export function ScheduleSection({
     <section
       id="horarios"
       aria-labelledby="horarios-titulo"
-      className="scroll-mt-4 border-y border-border bg-muted py-10"
+      className="scroll-mt-4 bg-muted py-12 md:py-16"
     >
-      <div className="container flex flex-col gap-5">
-        <div className="flex flex-col gap-1.5">
+      <div className="container flex flex-col gap-6">
+        <div className="flex flex-col gap-2">
           <h2 id="horarios-titulo" className={sectionTitle}>
             {homeMessages.schedule}
           </h2>
@@ -178,7 +203,7 @@ export function ScheduleSection({
           <div role="status" className="flex flex-wrap gap-3">
             <span className="sr-only">{messages.a11y.loadingContent}</span>
             {[0, 1, 2].map((index) => (
-              <Skeleton key={index} className="h-[74px] min-w-[min(100%,19rem)] flex-1" />
+              <Skeleton key={index} className="h-[78px] min-w-[min(100%,19rem)] flex-1" />
             ))}
           </div>
         ) : (
@@ -186,16 +211,9 @@ export function ScheduleSection({
             {items.map((item) => (
               <li
                 key={`${item.day}-${item.time}-${item.activity}`}
-                className="flex min-w-[min(100%,19rem)] flex-1 items-center gap-3.5 rounded-[14px] border border-border bg-background px-4 py-3.5"
+                className="flex min-w-[min(100%,19rem)] flex-1 items-center gap-4 rounded-2xl bg-background p-4 shadow-xs"
               >
-                <div className="flex w-[72px] flex-none flex-col items-center rounded-[10px] bg-info px-1 py-2 leading-tight text-info-foreground">
-                  <span className="text-[13px] font-bold tracking-wide uppercase">
-                    {shortDay(item.day)}
-                  </span>
-                  <span className="text-[19px] font-extrabold">
-                    {formatScheduleTime(item.time)}
-                  </span>
-                </div>
+                <ScheduleBadge item={item} />
                 <div className="flex min-w-0 flex-col gap-0.5">
                   <span className="font-bold">{item.activity}</span>
                   <span className="text-[15px] text-muted-foreground">{scheduleDetail(item)}</span>
@@ -218,9 +236,89 @@ export function ScheduleSection({
 }
 
 /**
- * Transmissões no YouTube e atendimento pelo WhatsApp (âncora `#ao-vivo`). O canal é o destaque: um banner escuro, com a
- * foto do culto como link para a transmissão (ou o canal), que fica antes do cartão do WhatsApp. Sem nenhum dos dois
- * links, só o cartão do WhatsApp (ou do contato) aparece.
+ * Convite para a Ficha de Visitante, logo depois dos horários: quem vê quando vir descobre aqui como se apresentar. Sem
+ * fundo próprio, entre a faixa dos horários e o banner escuro das transmissões. Só chama; o formulário é a página própria.
+ */
+export function VisitorSection() {
+  return (
+    <section aria-labelledby="visitante" className={`${plainSection} md:pt-14`}>
+      <div className="container grid items-center gap-6 md:grid-cols-2 md:gap-12">
+        <Photo
+          photo={photos.visitor}
+          sizes="(min-width: 1152px) 520px, (min-width: 768px) calc(50vw - 2.5rem), calc(100vw - 2rem)"
+          className="aspect-3/2 rounded-3xl"
+        />
+        <div className="flex flex-col items-start gap-5">
+          <div className="flex flex-col gap-2">
+            <p className={eyebrow}>{homeMessages.visitorEyebrow}</p>
+            <h2 id="visitante" className={sectionTitle}>
+              {homeMessages.visitorTitle}
+            </h2>
+            <p className="m-0 text-foreground/80">{homeMessages.visitorLead}</p>
+          </div>
+          <ul className="m-0 flex list-none flex-col gap-2 p-0">
+            {homeMessages.visitorOptions.map((option) => (
+              <li key={option} className="flex items-start gap-2.5 font-semibold">
+                <CheckIcon aria-hidden="true" className="mt-[3px] size-5 flex-none text-primary" />
+                {option}
+              </li>
+            ))}
+          </ul>
+          <Link
+            to="/sou-visitante"
+            className={buttonClassName({
+              size: "lg",
+              className: "w-full px-5 font-bold sm:w-auto",
+            })}
+          >
+            {homeMessages.visitorCta}
+            <ChevronRightIcon data-icon="inline-end" aria-hidden="true" />
+          </Link>
+          <p className="m-0 text-[15px] text-muted-foreground">{homeMessages.visitorPrivacy}</p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/**
+ * Convite para o pedido de oração, ao lado do atendimento. Só chama; o formulário é a página própria. É uma seção à parte
+ * (com o próprio título) para quem navega por regiões.
+ */
+function PrayerCard() {
+  return (
+    <section
+      aria-labelledby="pedido-oracao"
+      className="flex flex-col items-start gap-4 rounded-3xl border border-info-border bg-info p-6 text-info-foreground md:p-8"
+    >
+      <span className="flex size-12 flex-none items-center justify-center rounded-2xl bg-background">
+        <HandHeartIcon aria-hidden="true" className="size-6" />
+      </span>
+      <div className="flex flex-col gap-1.5">
+        <h2 id="pedido-oracao" className="m-0 text-[22px] leading-tight">
+          {homeMessages.prayerTitle}
+        </h2>
+        <p className="m-0">{homeMessages.prayerHint}</p>
+        <p className="m-0 text-[15px]">{homeMessages.prayerPrivacy}</p>
+      </div>
+      <Link
+        to="/pedido-de-oracao"
+        className={buttonClassName({
+          size: "lg",
+          className: "mt-auto w-full px-5 font-bold sm:w-auto",
+        })}
+      >
+        {homeMessages.prayerCta}
+        <ChevronRightIcon data-icon="inline-end" aria-hidden="true" />
+      </Link>
+    </section>
+  );
+}
+
+/**
+ * Transmissões no YouTube, atendimento pelo WhatsApp e pedido de oração (âncora `#ao-vivo`). O canal é o destaque: um
+ * banner escuro, com a foto do culto como link para a transmissão (ou o canal); embaixo, lado a lado em telas largas, os
+ * cartões do WhatsApp e do pedido de oração. Sem nenhum link do YouTube, só os dois cartões aparecem.
  */
 export function LiveSection({ settings }: { settings: PublicSettings | undefined }) {
   const live = safeHttpUrl(settings?.youtube_links?.live_url);
@@ -229,20 +327,24 @@ export function LiveSection({ settings }: { settings: PublicSettings | undefined
   const watchUrl = live ?? channel;
 
   return (
-    <section id="ao-vivo" aria-label={homeMessages.liveAndContact} className="scroll-mt-4 py-10">
+    <section
+      id="ao-vivo"
+      aria-label={homeMessages.liveAndContact}
+      className={`scroll-mt-4 ${plainSection}`}
+    >
       <div className="container flex flex-col gap-4">
         {watchUrl ? (
-          <article className="grid overflow-hidden rounded-2xl bg-footer text-footer-text md:grid-cols-2">
-            <div className="flex flex-col justify-center gap-4 p-6 md:p-10">
+          <article className="grid overflow-hidden rounded-3xl bg-footer text-footer-text md:grid-cols-2">
+            <div className="flex flex-col justify-center gap-4 p-6 md:p-12">
               <p className="m-0 flex items-center gap-2 text-[13px] font-bold tracking-widest text-highlight uppercase">
                 <PlayCircleIcon aria-hidden="true" className="size-5 flex-none" />
                 {homeMessages.youtubeEyebrow}
               </p>
-              <h2 className="m-0 text-[28px] leading-tight text-footer-foreground">
+              <h2 className="m-0 text-[28px] leading-tight tracking-tight text-footer-foreground md:text-[2rem]">
                 {homeMessages.watchServices}
               </h2>
               <p className="m-0 max-w-prose">{homeMessages.watchServicesHint}</p>
-              <div className="mt-1 flex flex-wrap gap-3">
+              <div className="mt-2 flex flex-wrap gap-3">
                 {live ? (
                   <ExternalAnchor
                     href={live}
@@ -275,7 +377,7 @@ export function LiveSection({ settings }: { settings: PublicSettings | undefined
             <div className="relative min-h-56">
               <Photo
                 photo={photos.worship}
-                sizes="(min-width: 1152px) 560px, (min-width: 768px) 50vw, calc(100vw - 2rem)"
+                sizes="(min-width: 1152px) 544px, (min-width: 768px) 50vw, calc(100vw - 2rem)"
                 className="absolute inset-0 aspect-auto rounded-none"
                 imgClassName="object-[50%_40%]"
               />
@@ -286,9 +388,9 @@ export function LiveSection({ settings }: { settings: PublicSettings | undefined
                 rel="noopener noreferrer"
                 tabIndex={-1}
                 aria-hidden="true"
-                className="absolute inset-0 flex items-center justify-center bg-footer/25 hover:bg-footer/10"
+                className="group absolute inset-0 flex items-center justify-center bg-footer/25 transition-colors hover:bg-footer/10"
               >
-                <span className="flex size-16 items-center justify-center rounded-full bg-highlight text-highlight-foreground shadow-lg">
+                <span className="flex size-16 items-center justify-center rounded-full bg-highlight text-highlight-foreground shadow-lg transition-transform group-hover:scale-105">
                   <PlayIcon className="size-8" />
                 </span>
               </a>
@@ -296,68 +398,207 @@ export function LiveSection({ settings }: { settings: PublicSettings | undefined
           </article>
         ) : null}
 
-        <article className="flex flex-wrap items-center justify-between gap-x-6 gap-y-4 rounded-2xl border border-border p-6">
-          <div className="flex min-w-[min(100%,18rem)] flex-1 flex-col gap-1.5">
-            <h2 className="m-0 text-[22px] leading-tight">{homeMessages.talkToUs}</h2>
-            <p className="m-0 text-muted-foreground">{homeMessages.talkToUsHint}</p>
-          </div>
-          {whatsapp ? (
-            <ExternalAnchor
-              href={whatsapp}
-              className={buttonClassName({
-                variant: "whatsapp",
-                size: "lg",
-                className: "min-w-52 flex-1 px-5 font-bold sm:flex-none",
-              })}
-            >
-              <MessageCircleIcon data-icon="inline-start" aria-hidden="true" />
-              {messages.pages.callWhatsapp}
-            </ExternalAnchor>
-          ) : (
-            <Link
-              to="/contato"
-              className={buttonClassName({
-                variant: "outline",
-                size: "lg",
-                className: "min-w-52 flex-1 px-5 font-bold sm:flex-none",
-              })}
-            >
-              {messages.nav.contact}
-            </Link>
-          )}
-        </article>
+        <div className="grid gap-4 md:grid-cols-2">
+          <article className="flex flex-col items-start gap-4 rounded-3xl border border-border p-6 md:p-8">
+            <span className="flex size-12 flex-none items-center justify-center rounded-2xl bg-success text-success-foreground">
+              <MessageCircleIcon aria-hidden="true" className="size-6" />
+            </span>
+            <div className="flex flex-col gap-1.5">
+              <h2 className="m-0 text-[22px] leading-tight">{homeMessages.talkToUs}</h2>
+              <p className="m-0 text-muted-foreground">{homeMessages.talkToUsHint}</p>
+            </div>
+            {whatsapp ? (
+              <div className="mt-auto flex w-full flex-wrap items-center gap-x-5 gap-y-2">
+                <ExternalAnchor
+                  href={whatsapp}
+                  className={buttonClassName({
+                    variant: "whatsapp",
+                    size: "lg",
+                    className: "w-full px-5 font-bold sm:w-auto",
+                  })}
+                >
+                  <MessageCircleIcon data-icon="inline-start" aria-hidden="true" />
+                  {messages.pages.callWhatsapp}
+                </ExternalAnchor>
+                <Link
+                  to="/contato"
+                  className="inline-flex min-h-11 items-center font-bold text-primary underline-offset-4 hover:underline"
+                >
+                  {homeMessages.talkToUsForm}
+                </Link>
+              </div>
+            ) : (
+              <Link
+                to="/contato"
+                className={buttonClassName({
+                  variant: "outline",
+                  size: "lg",
+                  className: "mt-auto w-full px-5 font-bold sm:w-auto",
+                })}
+              >
+                {messages.nav.contact}
+              </Link>
+            )}
+          </article>
+          <PrayerCard />
+        </div>
       </div>
     </section>
   );
 }
 
-/** Convite para o pedido de oração, entre o atendimento e os destaques. Só chama; o formulário é a página própria. */
-export function PrayerSection() {
+/**
+ * Juventude Salt, o ministério de jovens e adolescentes, que tem site próprio: a foto, o lema, os pilares, o Culto Salt do
+ * quadro de horários (quando existir) e o link para o site, em nova aba. Fica entre o atendimento e os destaques.
+ */
+export function YouthSection({ schedule }: { schedule: PublicSettings["schedule"] | undefined }) {
+  const meeting = schedule?.find((item) => /\bsalt\b/i.test(item.activity));
+  const { name, url } = institution.youthSite;
+
   return (
-    <section aria-labelledby="pedido-oracao" className="pb-10">
+    <section aria-labelledby="juventude" className={plainSection}>
       <div className="container">
-        <article className="flex flex-wrap items-center justify-between gap-x-6 gap-y-4 rounded-2xl border border-info-border bg-info p-6 text-info-foreground">
-          <div className="flex min-w-[min(100%,18rem)] flex-[2_1_18rem] items-start gap-3.5">
-            <HandHeartIcon aria-hidden="true" className="mt-0.5 size-7 flex-none" />
-            <div className="flex flex-col gap-1.5">
-              <h2 id="pedido-oracao" className="m-0 text-[22px] leading-tight">
-                {homeMessages.prayerTitle}
-              </h2>
-              <p className="m-0">{homeMessages.prayerHint}</p>
-              <p className="m-0 text-[15px]">{homeMessages.prayerPrivacy}</p>
-            </div>
+        <div className="grid overflow-hidden rounded-3xl bg-muted md:grid-cols-2">
+          <div className="relative aspect-3/2 md:aspect-auto">
+            <Photo
+              photo={photos.salt}
+              sizes="(min-width: 1152px) 544px, (min-width: 768px) 50vw, calc(100vw - 2rem)"
+              className="absolute inset-0 aspect-auto rounded-none"
+            />
           </div>
-          <Link
-            to="/pedido-de-oracao"
+          <div className="flex flex-col items-start gap-5 p-6 md:p-12">
+            <div className="flex flex-col gap-2">
+              <p className={eyebrow}>{homeMessages.youthEyebrow}</p>
+              <h2 id="juventude" className={sectionTitle} translate="no">
+                {name}
+              </h2>
+              <p className="m-0 text-foreground/80">{homeMessages.youthLead}</p>
+            </div>
+            <ul
+              aria-label={homeMessages.youthPillarsLabel}
+              className="m-0 flex list-none flex-wrap gap-2 p-0"
+            >
+              {homeMessages.youthPillars.map((pillar) => (
+                <li
+                  key={pillar}
+                  className="rounded-full bg-background px-3.5 py-1.5 text-[15px] font-semibold text-accent-foreground"
+                >
+                  {pillar}
+                </li>
+              ))}
+            </ul>
+            <blockquote className="m-0 border-l-[3px] border-primary pl-4">
+              <p className="m-0 italic">{homeMessages.youthVerse}</p>
+              <cite className="text-[15px] text-muted-foreground not-italic">
+                {homeMessages.youthVerseRef}
+              </cite>
+            </blockquote>
+            {meeting ? (
+              <div className="flex w-full items-center gap-4 rounded-2xl bg-background p-4">
+                <ScheduleBadge item={meeting} />
+                <div className="flex min-w-0 flex-col gap-0.5">
+                  <span className="font-bold">{meeting.activity}</span>
+                  <span className="text-[15px] text-muted-foreground">
+                    {scheduleDetail(meeting)}
+                  </span>
+                </div>
+              </div>
+            ) : null}
+            <ExternalAnchor
+              href={url}
+              className={buttonClassName({
+                size: "lg",
+                className: "mt-auto w-full px-5 font-bold sm:w-auto",
+              })}
+            >
+              {homeMessages.youthCta}
+              <ArrowUpRightIcon data-icon="inline-end" aria-hidden="true" />
+            </ExternalAnchor>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/** O primeiro Instagram com endereço válido, e o @ que sai dele (`instagram.com/pib_ls/` → `@pib_ls`), se der para saber. */
+function instagramProfile(
+  links: PublicSettings["social_links"],
+): { url: string; handle: string | null } | null {
+  const url = links
+    .filter((link) => /instagram/i.test(link.network))
+    .map((link) => safeHttpUrl(link.url))
+    .find((candidate) => candidate !== null);
+  if (!url) return null;
+
+  const [name, ...rest] = new URL(url).pathname.split("/").filter(Boolean);
+  return { url, handle: name && rest.length === 0 ? `@${name.replace(/^@/, "")}` : null };
+}
+
+/** O Lucide não traz mais ícones de marca: este é desenhado aqui, com o mesmo traço dos outros. */
+function InstagramIcon({ className }: { className: string }) {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <rect x="2" y="2" width="20" height="20" rx="5" />
+      <circle cx="12" cy="12" r="4" />
+      <path d="M17.5 6.5h.01" />
+    </svg>
+  );
+}
+
+/**
+ * Convite para o Instagram da igreja, com o endereço das redes sociais (Configurações do painel): sem Instagram cadastrado,
+ * a seção não aparece. Só leva ao perfil, em nova aba: mostrar as publicações aqui exigiria script e cookies de terceiro.
+ */
+export function InstagramSection({
+  socialLinks,
+}: {
+  socialLinks: PublicSettings["social_links"] | undefined;
+}) {
+  const profile = instagramProfile(socialLinks ?? []);
+  if (!profile) return null;
+
+  return (
+    <section aria-labelledby="instagram" className={plainSection}>
+      <div className="container">
+        <div className="flex flex-col items-start gap-6 border-y border-border py-8 md:flex-row md:items-center md:justify-between md:gap-12 md:py-10">
+          <div className="flex min-w-0 flex-col gap-3">
+            <div className="flex items-center gap-3 font-bold text-primary">
+              <span className="flex size-11 flex-none items-center justify-center rounded-full ring-1 ring-border">
+                <InstagramIcon className="size-[22px]" />
+              </span>
+              {profile.handle ? (
+                <span className="min-w-0 break-words" translate="no">
+                  {profile.handle}
+                </span>
+              ) : null}
+            </div>
+            <h2 id="instagram" className={sectionTitle}>
+              {homeMessages.instagramTitle}
+            </h2>
+            <p className="m-0 max-w-prose text-muted-foreground">{homeMessages.instagramHint}</p>
+          </div>
+          <ExternalAnchor
+            href={profile.url}
             className={buttonClassName({
+              variant: "outline",
               size: "lg",
-              className: "min-w-52 flex-1 px-5 font-bold sm:flex-none",
+              className: "w-full flex-none px-5 font-bold md:w-auto",
             })}
           >
-            {homeMessages.prayerCta}
-            <ChevronRightIcon data-icon="inline-end" aria-hidden="true" />
-          </Link>
-        </article>
+            {homeMessages.instagramCta}
+            <ArrowUpRightIcon data-icon="inline-end" aria-hidden="true" />
+          </ExternalAnchor>
+        </div>
       </div>
     </section>
   );
@@ -379,17 +620,21 @@ function HighlightCard({
   return (
     <Link
       to={to}
-      className={cn(
-        "flex min-w-[min(100%,19rem)] flex-1 items-start gap-3.5 rounded-2xl border border-border bg-muted p-5 text-foreground no-underline hover:border-border-strong",
-      )}
+      className="group flex min-w-[min(100%,19rem)] flex-1 items-start gap-4 rounded-3xl border border-border bg-background p-5 text-foreground no-underline transition-[border-color,box-shadow,translate] hover:-translate-y-0.5 hover:border-border-strong hover:shadow-md md:p-6"
     >
-      <span className="flex size-11 flex-none items-center justify-center rounded-xl bg-info text-info-foreground">
+      <span className="flex size-12 flex-none items-center justify-center rounded-2xl bg-info text-info-foreground">
         {icon}
       </span>
       <span className="flex min-w-0 flex-col gap-0.5">
         <span className="text-sm text-muted-foreground">{meta}</span>
-        <span className="font-bold">{title}</span>
-        <span className="text-[15px] font-bold text-primary">{action}</span>
+        <span className="font-bold break-words">{title}</span>
+        <span className="mt-1 inline-flex items-center gap-1 text-[15px] font-bold text-primary">
+          {action}
+          <ChevronRightIcon
+            aria-hidden="true"
+            className="size-4 transition-transform group-hover:translate-x-0.5"
+          />
+        </span>
       </span>
     </Link>
   );
@@ -414,8 +659,8 @@ export function HighlightsSection({
   if (highlights === undefined) return null;
 
   return (
-    <section aria-labelledby="destaques" className="pt-2 pb-12">
-      <div className="container flex flex-col gap-4">
+    <section aria-labelledby="destaques" className="pt-8 pb-14 md:pt-10 md:pb-20">
+      <div className="container flex flex-col gap-5">
         <h2 id="destaques" className={sectionTitle}>
           {homeMessages.highlights}
         </h2>

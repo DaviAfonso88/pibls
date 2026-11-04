@@ -3,6 +3,7 @@ import { DownloadIcon, ExternalLinkIcon, FileTextIcon } from "lucide-react";
 import { Link, useSearchParams } from "react-router";
 import { formatFileSize, formatIsoDate } from "~/shared/format";
 import { messages } from "~/shared/messages";
+import { safeHttpUrl } from "~/shared/site/links";
 import { buttonClassName } from "~/shared/ui/button-variants";
 import { EmptyState } from "~/shared/ui/empty-state";
 import { ErrorState } from "~/shared/ui/error-state";
@@ -56,6 +57,10 @@ function paramsFromFilters(filters: BulletinFilters): URLSearchParams {
 }
 
 function BulletinCard({ bulletin }: { bulletin: PublicBulletin }) {
+  // Boletim por link (BR-084): só "Ler boletim", porque não há arquivo nosso para baixar
+  const link = safeHttpUrl(bulletin.external_url);
+  const readUrl = link ?? bulletin.pdf_url;
+
   return (
     <li className="flex flex-[1_1_20rem] flex-col gap-1.5 rounded-2xl border border-border p-5">
       <span className="text-sm font-bold text-primary">
@@ -66,33 +71,37 @@ function BulletinCard({ bulletin }: { bulletin: PublicBulletin }) {
         <p className="m-0 text-muted-foreground">{bulletin.summary_text}</p>
       ) : null}
       <div className="mt-2 flex flex-wrap gap-3">
-        {/* PDF em nova aba, sem entregar `window.opener` ao arquivo */}
-        <a
-          href={bulletin.pdf_url}
-          target="_blank"
-          rel="noopener"
-          className={buttonClassName({
-            size: "lg",
-            className: "flex-[1_1_8rem] gap-2 px-3.5 font-bold",
-          })}
-        >
-          <ExternalLinkIcon aria-hidden="true" className="size-[18px]" />
-          {text.readBulletin}
-          <span className="sr-only"> {text.opensInNewTab}</span>
-        </a>
-        <a
-          href={bulletin.pdf_url}
-          download
-          className={buttonClassName({
-            variant: "outline",
-            size: "lg",
-            className: "flex-[1_1_8rem] gap-2 px-3.5 font-bold",
-          })}
-        >
-          <DownloadIcon aria-hidden="true" className="size-[18px]" />
-          {text.downloadPdf}
-          <span className="sr-only"> ({formatFileSize(bulletin.pdf_size_bytes)})</span>
-        </a>
+        {/* Em nova aba, sem entregar `window.opener` ao arquivo; o site de fora também não recebe de onde a pessoa veio */}
+        {readUrl ? (
+          <a
+            href={readUrl}
+            target="_blank"
+            rel={link ? "noopener noreferrer" : "noopener"}
+            className={buttonClassName({
+              size: "lg",
+              className: "flex-[1_1_8rem] gap-2 px-3.5 font-bold",
+            })}
+          >
+            <ExternalLinkIcon aria-hidden="true" className="size-[18px]" />
+            {text.readBulletin}
+            <span className="sr-only"> {text.opensInNewTab}</span>
+          </a>
+        ) : null}
+        {bulletin.pdf_url ? (
+          <a
+            href={bulletin.pdf_url}
+            download
+            className={buttonClassName({
+              variant: "outline",
+              size: "lg",
+              className: "flex-[1_1_8rem] gap-2 px-3.5 font-bold",
+            })}
+          >
+            <DownloadIcon aria-hidden="true" className="size-[18px]" />
+            {text.downloadPdf}
+            <span className="sr-only"> ({formatFileSize(bulletin.pdf_size_bytes ?? 0)})</span>
+          </a>
+        ) : null}
       </div>
     </li>
   );
@@ -100,7 +109,7 @@ function BulletinCard({ bulletin }: { bulletin: PublicBulletin }) {
 
 /**
  * A lista pública de boletins (design: Boletins; CAP-02): filtro por ano e mês que mora na URL, cards com "Ler boletim"
- * (nova aba) e "Baixar PDF", e paginação de 12 em 12. Boletim agendado não chega aqui (BR-042).
+ * (nova aba) e, quando há arquivo, "Baixar PDF", e paginação de 12 em 12. Boletim agendado não chega aqui (BR-042).
  */
 export function BulletinList() {
   const [params, setParams] = useSearchParams();

@@ -2,7 +2,7 @@ import * as z from "zod";
 import { isValidPhone, toE164 } from "~/shared/format";
 import { ruleMessages } from "~/shared/rule-messages";
 import type { ApiFormField } from "./api-shared";
-import type { RegistrationPayload } from "./public-api";
+import type { PublicEvent, RegistrationPayload } from "./public-api";
 import { publicEventMessages as text } from "./public-messages";
 
 /**
@@ -10,6 +10,9 @@ import { publicEventMessages as text } from "./public-messages";
  * evento: cada pergunta vira uma regra do seu tipo. Espelha o `RegisterForEvent` do servidor com as mesmas frases; o
  * servidor é a validação final e devolve as mesmas.
  */
+
+/** Quais campos fixos o evento pede (ADR-025). O que ele não pede não aparece, não é validado nem enviado. */
+export type AskedFields = Pick<PublicEvent, "asks_participant_name" | "asks_phone" | "asks_email">;
 
 const rules = ruleMessages;
 
@@ -149,17 +152,25 @@ export function hasHealthQuestion(fields: readonly ApiFormField[]): boolean {
   return fields.some((field) => field.sensitive === true);
 }
 
-export function buildRegistrationSchema(fields: readonly ApiFormField[], hasMinors: boolean) {
+export function buildRegistrationSchema(
+  fields: readonly ApiFormField[],
+  hasMinors: boolean,
+  asks: AskedFields,
+) {
   const answers: Record<string, z.ZodType<AnswerValue>> = {};
   for (const field of fields) answers[field.key] = answerSchema(field);
 
   return z.object({
-    participant_name: z.string().trim().refine(isPersonName, rules.name),
-    phone: z.string().trim().refine(isValidPhone, rules.phone),
-    email: z
-      .string()
-      .trim()
-      .refine((value) => value === "" || isEmail(value), rules.email),
+    participant_name: asks.asks_participant_name
+      ? z.string().trim().refine(isPersonName, rules.name)
+      : z.string(),
+    phone: asks.asks_phone ? z.string().trim().refine(isValidPhone, rules.phone) : z.string(),
+    email: asks.asks_email
+      ? z
+          .string()
+          .trim()
+          .refine((value) => value === "" || isEmail(value), rules.email)
+      : z.string(),
     guardian_name: hasMinors ? z.string().trim().refine(isPersonName, rules.guardian) : z.string(),
     guardian_phone: hasMinors ? z.string().trim().refine(isValidPhone, rules.guardian) : z.string(),
     guardian_consent: hasMinors
@@ -185,12 +196,14 @@ export function emptyAnswers(fields: readonly ApiFormField[]): Record<string, An
 
 /**
  * Os valores do formulário no formato da API (`RegistrationInput`): telefone em E.164, número como número, e só o que a
- * pessoa respondeu (pergunta em branco não vai). O responsável e o consentimento de saúde só vão quando o evento os pede.
+ * pessoa respondeu (pergunta em branco não vai). Nome, telefone, e-mail, responsável e consentimento de saúde só vão
+ * quando o evento os pede.
  */
 export function toRegistrationPayload(
   values: RegistrationValues,
   fields: readonly ApiFormField[],
   hasMinors: boolean,
+  asks: AskedFields,
 ): RegistrationPayload {
   const answers: Record<string, unknown> = {};
 
@@ -206,11 +219,11 @@ export function toRegistrationPayload(
     }
   }
 
-  const email = values.email.trim();
+  const email = asks.asks_email ? values.email.trim() : "";
 
   return {
-    participant_name: values.participant_name.trim(),
-    phone: toE164(values.phone) ?? values.phone.trim(),
+    ...(asks.asks_participant_name ? { participant_name: values.participant_name.trim() } : {}),
+    ...(asks.asks_phone ? { phone: toE164(values.phone) ?? values.phone.trim() } : {}),
     ...(email === "" ? {} : { email }),
     ...(hasMinors
       ? {

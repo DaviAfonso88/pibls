@@ -72,7 +72,8 @@ export const eventSchema = z
       .min(1, text.slugRequired)
       .max(160, text.slugInvalid)
       .regex(SLUG_PATTERN, text.slugInvalid),
-    ministry_id: z.string().min(1, text.ministryRequired),
+    // Vazio = sem ministério responsável (ADR-025); quem só escreve no próprio já vem com ele escolhido e travado
+    ministry_id: z.string(),
     description: z.string().max(20_000, text.descriptionLength),
     starts_at: z.string().regex(LOCAL_DATE_TIME, text.startsRequired),
     ends_at: z.string(),
@@ -88,6 +89,9 @@ export const eventSchema = z
       ),
     registration_deadline: z.string(),
     has_minors: z.boolean(),
+    asks_participant_name: z.boolean(),
+    asks_phone: z.boolean(),
+    asks_email: z.boolean(),
     form_schema: z.array(fieldDraftSchema).max(MAX_FORM_FIELDS, builderText.limit(MAX_FORM_FIELDS)),
   })
   .superRefine((values, context) => {

@@ -2,6 +2,7 @@ import * as z from "zod";
 import { isValidCnpj } from "~/shared/format";
 import { ruleMessages } from "~/shared/rule-messages";
 import { contentAdminMessages as text } from "./admin-messages";
+import { isBulletinLink } from "./bulletin-link";
 import { pixAdminMessages } from "./pix-messages";
 import { SLUG_PATTERN } from "./slug";
 import { youtubeVideoId } from "./youtube";
@@ -47,9 +48,22 @@ export const bulletinSchema = z
     reference_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, text.bulletin.referenceRequired),
     title: z.string().trim().min(3, text.bulletin.titleLength).max(150, text.bulletin.titleLength),
     summary_text: z.string().max(300, text.bulletin.summaryLength),
+    // O PDF não é campo do formulário (fica fora do rascunho); quem confere se ele foi escolhido é a tela
+    source: z.enum(["pdf", "link"]),
+    external_url: z.string().trim(),
     ...publication,
   })
-  .superRefine(checkSchedule);
+  .superRefine((values, context) => {
+    checkSchedule(values, context);
+
+    if (values.source === "link" && !isBulletinLink(values.external_url)) {
+      context.addIssue({
+        code: "custom",
+        path: ["external_url"],
+        message: ruleMessages.bulletinLink,
+      });
+    }
+  });
 export type BulletinValues = z.infer<typeof bulletinSchema>;
 
 export const postSchema = z

@@ -14,7 +14,6 @@ const homeParser = object({
       reference_date: string,
       title: string,
       summary_text: nullishString,
-      pdf_url: string,
     }),
   ),
   latest_posts: withDefault(

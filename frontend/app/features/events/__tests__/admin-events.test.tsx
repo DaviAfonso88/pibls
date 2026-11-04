@@ -65,6 +65,9 @@ function event(id: number, overrides: Record<string, unknown> = {}) {
     description: "<p>Três dias de louvor.</p>",
     banner_url: null,
     has_minors: false,
+    asks_participant_name: true,
+    asks_phone: true,
+    asks_email: true,
     form_schema: [],
     is_published: true,
     max_spots: 60,
@@ -109,7 +112,7 @@ function setDateTime(label: RegExp | string, value: string) {
 
 async function fillBasics(user: ReturnType<typeof userEvent.setup>) {
   await user.type(await screen.findByRole("textbox", { name: "Nome" }), "Retiro de jovens");
-  await user.selectOptions(screen.getByRole("combobox", { name: "Ministério responsável" }), "2");
+  await user.selectOptions(screen.getByRole("combobox", { name: /^Ministério responsável/ }), "2");
   setDateTime("Começa", "2099-12-05T09:00");
   await user.type(screen.getByRole("textbox", { name: "Local" }), "Chácara Boa Vista");
   await screen.findByRole("textbox", { name: "Descrição" });
@@ -310,6 +313,9 @@ describe("cadastro", () => {
       max_spots: 60,
       registration_deadline: null,
       has_minors: false,
+      asks_participant_name: true,
+      asks_phone: true,
+      asks_email: true,
       form_schema: [],
       is_published: false,
     });
@@ -379,7 +385,7 @@ describe("cadastro", () => {
     ]);
   });
 
-  it("valida no navegador: nome, ministério, início, local, descrição, término e prazo (BR-025, BR-026)", async () => {
+  it("valida no navegador: nome, início, local, descrição, término e prazo (BR-025, BR-026); o ministério é opcional", async () => {
     const user = userEvent.setup();
     renderAdmin("/admin/eventos/novo");
     await screen.findByRole("textbox", { name: "Nome" });
@@ -387,12 +393,17 @@ describe("cadastro", () => {
     await user.click(screen.getByRole("button", { name: "Salvar rascunho" }));
 
     expect(await screen.findByText("O nome precisa ter de 3 a 150 caracteres.")).toBeVisible();
-    expect(screen.getByText("Escolha o ministério.")).toBeVisible();
+    expect(screen.getByRole("combobox", { name: /^Ministério responsável/ })).not.toHaveAttribute(
+      "aria-invalid",
+    );
     expect(screen.getByText("Informe quando o evento começa.")).toBeVisible();
     expect(screen.getByText("Informe o local do evento.")).toBeVisible();
 
     await user.type(screen.getByRole("textbox", { name: "Nome" }), "Retiro");
-    await user.selectOptions(screen.getByRole("combobox", { name: "Ministério responsável" }), "2");
+    await user.selectOptions(
+      screen.getByRole("combobox", { name: /^Ministério responsável/ }),
+      "2",
+    );
     setDateTime("Começa", "2099-12-05T09:00");
     setDateTime(/^Termina/, "2099-12-05T08:00");
     setDateTime(/Inscrições até/, "2099-12-06T08:00");
@@ -599,27 +610,27 @@ describe("cadastro", () => {
     await waitFor(() => expect(router.state.location.pathname).toBe("/admin/eventos/9"));
   });
 
-  it("BR-030 o líder tem o ministério fixo no dele", async () => {
+  it("BR-030 ADR-025 o líder escolhe só entre o ministério dele (já marcado) e nenhum, o evento geral", async () => {
     mockMe(LIDER);
-    let sent: { ministry_id?: number } | null = null;
+    let sent: { ministry_id?: number | null } | null = null;
     server.use(
       http.post("*/api/admin/events", async ({ request }) => {
-        sent = (await request.json()) as { ministry_id?: number };
+        sent = (await request.json()) as { ministry_id?: number | null };
         return HttpResponse.json({ data: event(9) }, { status: 201 });
       }),
       http.get("*/api/admin/events/9", () => HttpResponse.json({ data: event(9) })),
     );
     const user = userEvent.setup();
     renderAdmin("/admin/eventos/novo");
-    const ministry = await screen.findByRole("combobox", { name: "Ministério responsável" });
+    const ministry = await screen.findByRole("combobox", { name: /^Ministério responsável/ });
 
-    expect(ministry).toBeDisabled();
+    expect(ministry).toBeEnabled();
     expect(ministry).toHaveValue("2");
     expect(
       within(ministry)
         .getAllByRole("option")
         .map((option) => option.textContent),
-    ).toEqual(["Escolha…", "Música"]);
+    ).toEqual(["Sem ministério responsável", "Música"]);
 
     await user.type(screen.getByRole("textbox", { name: "Nome" }), "Ensaio aberto");
     setDateTime("Começa", "2099-12-05T09:00");
@@ -632,6 +643,106 @@ describe("cadastro", () => {
     await user.click(screen.getByRole("button", { name: "Salvar rascunho" }));
 
     await waitFor(() => expect(sent).toMatchObject({ ministry_id: 2 }));
+  });
+
+  it("ADR-025 o líder edita um evento geral, que continua sem ministério", async () => {
+    mockMe(LIDER);
+    let sent: Record<string, unknown> | null = null;
+    server.use(
+      http.get("*/api/admin/events/1", () =>
+        HttpResponse.json({ data: event(1, { ministry: null }) }),
+      ),
+      http.patch("*/api/admin/events/1", async ({ request }) => {
+        sent = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({ data: event(1, { ministry: null, title: "Culto geral" }) });
+      }),
+    );
+    const user = userEvent.setup();
+    renderAdmin("/admin/eventos/1");
+
+    expect(await screen.findByRole("heading", { level: 1, name: "Evento 1" })).toBeVisible();
+    expect(screen.getByRole("combobox", { name: /^Ministério responsável/ })).toHaveValue("");
+
+    const name = screen.getByRole("textbox", { name: "Nome" });
+    await user.clear(name);
+    await user.type(name, "Culto geral");
+    await user.click(screen.getByRole("button", { name: "Salvar alterações" }));
+
+    await waitFor(() => expect(sent).toMatchObject({ title: "Culto geral", ministry_id: null }));
+  });
+
+  it("ADR-025 quem gerencia todos os eventos pode deixar o evento sem ministério", async () => {
+    let sent: Record<string, unknown> | null = null;
+    server.use(
+      http.post("*/api/admin/events", async ({ request }) => {
+        sent = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({ data: event(9, { ministry: null }) }, { status: 201 });
+      }),
+      http.get("*/api/admin/events/9", () =>
+        HttpResponse.json({ data: event(9, { ministry: null }) }),
+      ),
+    );
+    const user = userEvent.setup();
+    renderAdmin("/admin/eventos/novo");
+    await fillBasics(user);
+
+    const ministry = screen.getByRole("combobox", {
+      name: /^Ministério responsável\s*\(opcional\)$/,
+    });
+    expect(ministry).toHaveAccessibleDescription(
+      "Sem ministério, o evento é geral: todos que gerenciam eventos, inclusive os líderes de ministério, veem e editam.",
+    );
+    await user.selectOptions(ministry, "");
+    expect(within(ministry).getAllByRole("option")[0]).toHaveTextContent(
+      "Sem ministério responsável",
+    );
+    await user.click(screen.getByRole("button", { name: "Salvar rascunho" }));
+
+    await waitFor(() => expect(sent).toMatchObject({ ministry_id: null }));
+  });
+
+  it("ADR-025 liga e desliga o nome, o telefone e o e-mail do formulário de inscrição", async () => {
+    let sent: Record<string, unknown> | null = null;
+    server.use(
+      http.post("*/api/admin/events", async ({ request }) => {
+        sent = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({ data: event(9) }, { status: 201 });
+      }),
+      http.get("*/api/admin/events/9", () => HttpResponse.json({ data: event(9) })),
+    );
+    const user = userEvent.setup();
+    const { container } = renderAdmin("/admin/eventos/novo");
+    await fillBasics(user);
+
+    const fixed = screen.getByRole("group", { name: "Campos padrão do formulário" });
+    const name = within(fixed).getByRole("switch", { name: /Nome completo/ });
+    const phone = within(fixed).getByRole("switch", { name: /Telefone/ });
+    const email = within(fixed).getByRole("switch", { name: /E-mail/ });
+    expect([name, phone, email].map((toggle) => (toggle as HTMLInputElement).checked)).toEqual([
+      true,
+      true,
+      true,
+    ]);
+    expect(phone).toHaveAccessibleDescription("Aparece · obrigatório");
+    expect(screen.queryByText(/não consegue barrar a inscrição repetida/)).toBeNull();
+
+    await user.click(phone);
+    await user.click(email);
+
+    expect(phone).toHaveAccessibleDescription("Não aparece");
+    expect(email).toHaveAccessibleDescription("Não aparece · sem e-mail de confirmação");
+    expect(screen.getByText(/não consegue barrar a inscrição repetida/)).toBeVisible();
+    await expectNoA11yViolations(container);
+
+    await user.click(screen.getByRole("button", { name: "Salvar rascunho" }));
+
+    await waitFor(() =>
+      expect(sent).toMatchObject({
+        asks_participant_name: true,
+        asks_phone: false,
+        asks_email: false,
+      }),
+    );
   });
 });
 

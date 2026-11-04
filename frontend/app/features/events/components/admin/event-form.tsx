@@ -49,7 +49,13 @@ const RichTextEditor = lazy(() =>
   import("~/shared/ui/rich-text-editor").then((module) => ({ default: module.RichTextEditor })),
 );
 
-const { form: text, actions: actionText, draft: draftText, state: stateText } = eventAdminMessages;
+const {
+  form: text,
+  actions: actionText,
+  draft: draftText,
+  state: stateText,
+  builder: builderText,
+} = eventAdminMessages;
 
 export interface MinistryOption {
   id: number;
@@ -67,7 +73,17 @@ const FIELDS = [
   "max_spots",
   "registration_deadline",
   "has_minors",
+  "asks_participant_name",
+  "asks_phone",
+  "asks_email",
   "form_schema",
+] as const;
+
+/** Os campos padrão do formulário de inscrição, que o evento liga ou desliga (ADR-025). */
+const FIXED_FIELDS = [
+  { name: "asks_participant_name", id: "pede-nome" },
+  { name: "asks_phone", id: "pede-telefone" },
+  { name: "asks_email", id: "pede-email" },
 ] as const;
 
 const STATE_TONE: Record<EventState, StatusTone> = {
@@ -103,6 +119,10 @@ const draftShape = z.object({
   max_spots: z.string(),
   registration_deadline: z.string(),
   has_minors: z.boolean(),
+  // Rascunho de antes das chaves dos campos padrão (ADR-025): pede os três, como antes
+  asks_participant_name: z.boolean().default(true),
+  asks_phone: z.boolean().default(true),
+  asks_email: z.boolean().default(true),
   form_schema: z.array(draftFieldShape),
 });
 
@@ -129,19 +149,20 @@ function deadlinePassed(local: string, now: Date = new Date()): boolean {
 
 /**
  * Cadastro e edição de evento (design: AdminEvento; CAP-12): dados, imagem de capa, vagas e prazo, formulário de inscrição
- * (construtor) e publicação. O rascunho fica no navegador, sem a imagem (FR-077). Quem só tem `eventos.write.own` tem o
- * ministério fixo no próprio (`lockedMinistryId`); o servidor confere do mesmo jeito (BR-030).
+ * (construtor) e publicação. O rascunho fica no navegador, sem a imagem (FR-077). Quem só tem `eventos.write.own` escolhe
+ * entre o próprio ministério (`ownMinistryId`, já marcado no evento novo) e nenhum, o evento geral (ADR-025); o servidor
+ * confere do mesmo jeito (BR-030).
  */
 export function EventForm({
   id,
   userId,
   ministries,
-  lockedMinistryId,
+  ownMinistryId,
 }: {
   id: number | null;
   userId: number;
   ministries: readonly MinistryOption[];
-  lockedMinistryId: number | null;
+  ownMinistryId: number | null;
 }) {
   const editing = id !== null;
   const navigate = useNavigate();
@@ -151,7 +172,7 @@ export function EventForm({
 
   const form = useForm<EventValues>({
     resolver: zodResolver(eventSchema),
-    defaultValues: emptyValues(lockedMinistryId),
+    defaultValues: emptyValues(ownMinistryId),
   });
   const {
     register,
@@ -593,19 +614,22 @@ export function EventForm({
                   </span>
                 )}
               </FormField>
-              <FormField id="ministerio" label={text.ministry} error={errors.ministry_id?.message}>
+              <FormField
+                id="ministerio"
+                label={text.ministry}
+                optionalLabel={messages.common.optional}
+                hint={text.ministryHint}
+                error={errors.ministry_id?.message}
+              >
                 {(control) => (
                   <NativeSelect
                     {...control}
                     className="w-full max-w-md"
-                    disabled={lockedMinistryId !== null}
                     {...register("ministry_id")}
                   >
-                    <NativeSelectOption value="">{text.ministryPlaceholder}</NativeSelectOption>
+                    <NativeSelectOption value="">{text.noMinistry}</NativeSelectOption>
                     {ministries
-                      .filter(
-                        (ministry) => lockedMinistryId === null || ministry.id === lockedMinistryId,
-                      )
+                      .filter((ministry) => ownMinistryId === null || ministry.id === ownMinistryId)
                       .map((ministry) => (
                         <NativeSelectOption key={ministry.id} value={String(ministry.id)}>
                           {ministry.name}
@@ -737,6 +761,33 @@ export function EventForm({
           <p className="m-0 text-[15px] text-muted-foreground">
             {eventAdminMessages.builder.intro}
           </p>
+          <fieldset className="m-0 flex min-w-0 flex-col gap-2 border-0 p-0">
+            <legend className="mb-2 p-0 font-bold">{builderText.fixedLabel}</legend>
+            {FIXED_FIELDS.map(({ name, id }) => (
+              <label
+                key={name}
+                htmlFor={id}
+                className="flex min-h-11 flex-wrap items-center gap-x-3 gap-y-1 rounded-[10px] border border-border bg-muted/50 px-3.5 py-2.5"
+              >
+                <input
+                  id={id}
+                  type="checkbox"
+                  role="switch"
+                  className="size-5 flex-none"
+                  aria-describedby={`${id}-regra`}
+                  disabled={busy}
+                  {...register(name)}
+                />
+                <span className="flex-[1_1_12rem] font-bold">{builderText.fixed[name].label}</span>
+                <span id={`${id}-regra`} className="text-sm text-muted-foreground">
+                  {values[name] ? builderText.fixed[name].on : builderText.fixed[name].off}
+                </span>
+              </label>
+            ))}
+            {!values.asks_participant_name || !values.asks_phone ? (
+              <p className="m-0 text-sm text-muted-foreground">{builderText.duplicatesAllowed}</p>
+            ) : null}
+          </fieldset>
           {schemaError ? (
             <Alert
               variant="destructive"

@@ -17,7 +17,7 @@ use function Pest\Laravel\post;
 
 /*
 | Painel de boletins (T107): POST/PATCH/DELETE /api/admin/bulletins e POST …/pdf (contracts/openapi.yaml).
-| BR-040 (edição única), BR-041 (PDF verdadeiro até 10 MB), BR-042 (agendado fica invisível).
+| BR-040 (edição única), BR-041 (PDF verdadeiro até 10 MB), BR-042 (agendado fica invisível), BR-084 (PDF ou link).
 */
 
 beforeEach(function () {
@@ -43,6 +43,17 @@ function postBulletin(array $fields, ?UploadedFile $pdf = null): TestResponse
     return test()->post('/api/admin/bulletins', [...$fields, 'pdf' => $pdf ?? bulletinPdfUpload()], ['Accept' => 'application/json']);
 }
 
+function heyzineLink(): string
+{
+    return 'https://heyzine.com/flip-book/4954dbb36f.html';
+}
+
+/** POST JSON com o link, como o painel envia quando não há arquivo. */
+function postLinkedBulletin(array $overrides = []): TestResponse
+{
+    return test()->postJson('/api/admin/bulletins', bulletinFields(['external_url' => heyzineLink(), ...$overrides]));
+}
+
 it('cadastra o boletim com o PDF e responde 201 no formato BulletinAdmin', function () {
     $response = postBulletin(bulletinFields())->assertCreated();
 
@@ -50,6 +61,7 @@ it('cadastra o boletim com o PDF e responde 201 no formato BulletinAdmin', funct
         ->assertJsonPath('data.reference_date', '2026-11-08')
         ->assertJsonPath('data.title', 'Boletim de novembro')
         ->assertJsonPath('data.summary_text', 'Resumo da semana.')
+        ->assertJsonPath('data.external_url', null)
         ->assertJsonPath('data.status', 'PUBLICADO');
 
     $url = $response->json('data.pdf_url');
@@ -148,10 +160,120 @@ it('valida os campos do cadastro com 422 e o campo no envelope', function (array
     'publicação inválida' => [['published_at' => 'amanhã'], 'published_at'],
 ]);
 
-it('exige o PDF no cadastro', function () {
+it('BR-084 exige o PDF ou o link no cadastro', function () {
     test()->postJson('/api/admin/bulletins', bulletinFields())
         ->assertStatus(422)
-        ->assertJsonFragment(['field' => 'pdf']);
+        ->assertJsonFragment(['field' => 'pdf', 'message' => 'Envie o PDF ou informe o link do boletim.']);
+
+    expect(Bulletin::query()->count())->toBe(0);
+});
+
+it('BR-084 cadastra o boletim só com o link, sem gravar arquivo', function () {
+    postLinkedBulletin()
+        ->assertCreated()
+        ->assertJsonPath('data.external_url', heyzineLink())
+        ->assertJsonPath('data.pdf_url', null)
+        ->assertJsonPath('data.pdf_size_bytes', null)
+        ->assertJsonPath('data.status', 'PUBLICADO');
+
+    expect(Storage::disk('uploads')->allFiles())->toBe([]);
+});
+
+it('BR-084 recusa o PDF e o link juntos, sem gravar nada', function () {
+    postBulletin(bulletinFields(['external_url' => heyzineLink()]))
+        ->assertStatus(422)
+        ->assertJsonFragment(['field' => 'external_url', 'message' => 'Envie só o PDF ou só o link do boletim.']);
+
+    expect(Bulletin::query()->count())->toBe(0)
+        ->and(Storage::disk('uploads')->allFiles())->toBe([]);
+});
+
+it('BR-084 recusa um link que não é https com domínio de verdade', function (string $link) {
+    postLinkedBulletin(['external_url' => $link])
+        ->assertStatus(422)
+        ->assertJsonFragment(['field' => 'external_url', 'message' => 'Informe um link completo, que comece com https://.']);
+
+    expect(Bulletin::query()->count())->toBe(0);
+})->with([
+    'http' => ['http://heyzine.com/flip-book/4954dbb36f.html'],
+    'sem protocolo' => ['heyzine.com/flip-book/4954dbb36f.html'],
+    'javascript:' => ['javascript:alert(1)'],
+    'javascript: com https no meio' => ['javascript://https://heyzine.com/%0Aalert(1)'],
+    'data:' => ['data:text/html,<script>alert(1)</script>'],
+    'com usuário e senha' => ['https://usuario:senha@heyzine.com/flip-book.html'],
+    'sem domínio' => ['https://localhost/boletim.html'],
+    'endereço IP' => ['https://192.168.0.10/boletim.html'],
+    'com espaço' => ['https://heyzine.com/flip book.html'],
+    'comprido demais' => ['https://heyzine.com/'.str_repeat('a', 500)],
+]);
+
+it('BR-084 PATCH com o link tira o PDF do boletim e apaga o arquivo do disco', function () {
+    $created = postBulletin(bulletinFields())->assertCreated();
+    $id = $created->json('data.id');
+    $path = substr((string) $created->json('data.pdf_url'), strlen('/uploads/'));
+
+    patchJson("/api/admin/bulletins/{$id}", ['external_url' => heyzineLink()])
+        ->assertOk()
+        ->assertJsonPath('data.external_url', heyzineLink())
+        ->assertJsonPath('data.pdf_url', null)
+        ->assertJsonPath('data.pdf_size_bytes', null);
+
+    Storage::disk('uploads')->assertMissing($path);
+    $audit = AuditLog::query()->where('action', 'bulletin.updated')->where('resource_id', (string) $id)->firstOrFail();
+    expect($audit->changes['fields'])->toEqualCanonicalizing(['pdf_path', 'pdf_size_bytes', 'external_url'])
+        ->and($audit->changes['after']['external_url'])->toBe(heyzineLink());
+});
+
+it('BR-084 PATCH com link inválido não mexe no PDF', function () {
+    $created = postBulletin(bulletinFields())->assertCreated();
+    $id = $created->json('data.id');
+    $path = substr((string) $created->json('data.pdf_url'), strlen('/uploads/'));
+
+    patchJson("/api/admin/bulletins/{$id}", ['external_url' => 'http://heyzine.com/x.html'])
+        ->assertStatus(422)
+        ->assertJsonFragment(['field' => 'external_url']);
+
+    Storage::disk('uploads')->assertExists($path);
+    expect(Bulletin::query()->findOrFail($id))->pdf_path->toBe($path)->external_url->toBeNull();
+});
+
+it('BR-084 PATCH não deixa o boletim sem link e sem PDF', function () {
+    $bulletin = Bulletin::factory()->linked()->create();
+
+    patchJson("/api/admin/bulletins/{$bulletin->getKey()}", ['external_url' => null])
+        ->assertStatus(422)
+        ->assertJsonFragment(['field' => 'external_url', 'message' => 'Informe um link completo, que comece com https://.']);
+
+    expect($bulletin->refresh()->external_url)->toBe(heyzineLink());
+});
+
+it('BR-084 PATCH sem o link mantém o link do boletim', function () {
+    $bulletin = Bulletin::factory()->linked()->create();
+
+    patchJson("/api/admin/bulletins/{$bulletin->getKey()}", ['title' => 'Outro título'])
+        ->assertOk()
+        ->assertJsonPath('data.title', 'Outro título')
+        ->assertJsonPath('data.external_url', heyzineLink());
+});
+
+it('BR-084 POST …/pdf troca o link pelo arquivo', function () {
+    $bulletin = Bulletin::factory()->linked()->create();
+
+    $response = post("/api/admin/bulletins/{$bulletin->getKey()}/pdf", ['pdf' => bulletinPdfUpload()], ['Accept' => 'application/json'])
+        ->assertOk()
+        ->assertJsonPath('data.external_url', null);
+
+    Storage::disk('uploads')->assertExists(substr((string) $response->json('data.pdf_url'), strlen('/uploads/')));
+    expect($response->json('data.pdf_size_bytes'))->toBeGreaterThan(0);
+});
+
+it('BR-084 PDF recusado na troca mantém o link', function () {
+    $bulletin = Bulletin::factory()->linked()->create();
+    $fake = UploadedFile::fake()->createWithContent('falso.pdf', 'não é PDF')->mimeType('application/pdf');
+
+    post("/api/admin/bulletins/{$bulletin->getKey()}/pdf", ['pdf' => $fake], ['Accept' => 'application/json'])->assertStatus(422);
+
+    expect($bulletin->refresh())->external_url->toBe(heyzineLink())->pdf_path->toBeNull();
 });
 
 it('BR-042 um boletim agendado fica fora da API pública e aparece no painel como AGENDADO', function () {

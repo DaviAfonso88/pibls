@@ -133,7 +133,8 @@ erDiagram
 | `reference_date` | DATE | Obrigatório; ordena a lista pública |
 | `title` | VARCHAR(150) | 3 a 150 caracteres |
 | `summary_text` | TEXT | Texto puro, até 5.000 |
-| `pdf_path`, `pdf_size_bytes` | VARCHAR(255), INT | PDF verdadeiro (MIME real + `%PDF-`), até 10 MB (BR-041); nome aleatório de 32 hex |
+| `pdf_path`, `pdf_size_bytes` | VARCHAR(255), INT | Vazios no boletim por link. PDF verdadeiro (MIME real + `%PDF-`), até 10 MB (BR-041); nome aleatório de 32 hex |
+| `external_url` | VARCHAR(500) | Link externo `https`, vazio no boletim com PDF. PDF ou link, nunca os dois e nunca nenhum (BR-084, ADR-026) |
 | `published_at` | DATETIME | Padrão: agora; futuro = agendado (BR-042) |
 | `deleted_at` | DATETIME | Exclusão lógica (ADR-009) |
 

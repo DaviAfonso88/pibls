@@ -30,7 +30,8 @@ export function CancelRegistrationDialog({
   onOpenChange,
   onConfirm,
 }: {
-  name: string;
+  /** Nulo quando o evento não pede o nome (ADR-025). */
+  name: string | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onConfirm: (reason: CancelReason) => Promise<void>;

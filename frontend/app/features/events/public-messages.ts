@@ -49,7 +49,7 @@ export const publicEventMessages = {
 
   registration: "Inscrição",
   fullName: "Nome completo",
-  whatsapp: "WhatsApp",
+  phone: "Telefone",
   email: "E-mail",
   optional: "(opcional)",
   emailHint: "Para receber a confirmação da inscrição.",

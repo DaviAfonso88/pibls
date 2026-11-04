@@ -27,7 +27,7 @@ use Illuminate\Support\Carbon;
  * @property int $id
  * @property string $title
  * @property string $slug
- * @property int $ministry_id
+ * @property int|null $ministry_id
  * @property string $description
  * @property string $excerpt
  * @property Carbon $starts_at
@@ -37,6 +37,9 @@ use Illuminate\Support\Carbon;
  * @property int|null $max_spots
  * @property Carbon|null $registration_deadline
  * @property bool $has_minors
+ * @property bool $asks_participant_name
+ * @property bool $asks_phone
+ * @property bool $asks_email
  * @property bool $is_published
  * @property array<int, array<string, mixed>> $form_schema
  * @property Carbon|null $updated_at
@@ -48,12 +51,24 @@ use Illuminate\Support\Carbon;
 #[Table(name: 'events')]
 #[Fillable([
     'title', 'slug', 'ministry_id', 'description', 'excerpt', 'starts_at', 'ends_at', 'location', 'banner_path',
-    'max_spots', 'registration_deadline', 'has_minors', 'is_published', 'form_schema', 'created_by', 'updated_by',
+    'max_spots', 'registration_deadline', 'has_minors', 'asks_participant_name', 'asks_phone', 'asks_email',
+    'is_published', 'form_schema', 'created_by', 'updated_by',
 ])]
 class Event extends Model
 {
     /** @use HasFactory<EventFactory> */
     use HasFactory;
+
+    /**
+     * Os padrões do banco também no objeto recém-criado: o formulário pede nome, telefone e e-mail (ADR-025).
+     *
+     * @var array<string, mixed>
+     */
+    protected $attributes = [
+        'asks_participant_name' => true,
+        'asks_phone' => true,
+        'asks_email' => true,
+    ];
 
     /**
      * @return array<string, string>
@@ -66,6 +81,9 @@ class Event extends Model
             'registration_deadline' => 'datetime',
             'max_spots' => 'integer',
             'has_minors' => 'boolean',
+            'asks_participant_name' => 'boolean',
+            'asks_phone' => 'boolean',
+            'asks_email' => 'boolean',
             'is_published' => 'boolean',
             'form_schema' => 'array',
         ];

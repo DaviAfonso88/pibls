@@ -28,8 +28,9 @@ const answerParser = object({
 const registrationParser = object({
   id: number,
   created_at: string,
-  participant_name: string,
-  phone: string,
+  // Nulos quando o evento não pede o nome ou o telefone (ADR-025)
+  participant_name: nullish(string),
+  phone: nullish(string),
   email: nullish(string),
   guardian_name: nullish(string),
   guardian_phone: nullish(string),

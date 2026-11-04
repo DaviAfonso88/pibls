@@ -15,7 +15,7 @@
 
 > Respostas tomadas pela opção recomendada, seguindo a orientação do responsável de adotar as recomendações. Precisam de confirmação; se alguma mudar, rodar `/speckit.clarify` de novo.
 
-- Q: Como o membro "lê o boletim na tela"? → A: A página do boletim mostra o resumo em texto; "Ler boletim" abre o PDF no leitor nativo do aparelho (nova aba) e "Baixar PDF" faz o download. Não há leitor de PDF embutido no site.
+- Q: Como o membro "lê o boletim na tela"? → A: A página do boletim mostra o resumo em texto; "Ler boletim" abre o PDF no leitor nativo do aparelho (nova aba) e "Baixar PDF" faz o download. Não há leitor de PDF embutido no site. Um boletim também pode ser publicado por link externo, como um flipbook (ADR-026): "Ler boletim" abre o link em nova aba e não há "Baixar PDF".
 - Q: O aviso da Ceia do Senhor é automático ou manual? → A: Manual. A Secretaria edita o texto e liga ou desliga o aviso no painel. O sistema não calcula a data do 1º domingo.
 - Q: Haverá medição de uso do site e banner de cookies? → A: Haverá medição agregada de uso, sem cookies, sem identificar a pessoa e, portanto, sem banner de consentimento. A ferramenta é escolhida antes do go-live (TBD-09).
 - Q: O que acontece com o texto digitado quando a sessão do painel expira? → A: Nos formulários de conteúdo (boletim, mensagem Palavra Viva e evento), o rascunho fica guardado no próprio navegador e é oferecido de volta após o novo login. Formulários com dados pessoais (atendimento de contatos, anotações, inscrições, PIX) nunca guardam nada no navegador.
@@ -38,7 +38,9 @@ Uma pessoa que acabou de se mudar para Lagoa Santa encontra o site pelo Google o
    - o quadro de horários (Quinta 20h Culto de Oração; Domingo 9h EBD; Domingo 10h10 Culto Matinal; Domingo 19h30 Culto Noturno; 1ª sexta-feira 19h30 Culto Salt);
    - o destaque da campanha "Estamos Construindo", com chamada para a área PIX;
    - o aviso da Ceia do Senhor;
-   - os botões do YouTube (ao vivo e canal) e do WhatsApp de atendimento.
+   - o convite para a Ficha de Visitante, com link para `/sou-visitante`;
+   - os botões do YouTube (ao vivo e canal) e do WhatsApp de atendimento;
+   - o convite para o Instagram da igreja, quando cadastrado nas redes sociais.
 2. **Given** a Secretaria alterou um horário no painel, **When** o visitante abre a página inicial, **Then** vê o horário novo em até 1 minuto, sem nova publicação do site.
 3. **Given** a página "Como chegar", **When** o visitante a abre, **Then** vê:
    - o endereço completo;
@@ -146,7 +148,7 @@ O voluntário da Comunicação cadastra o boletim da semana com o PDF em poucos 
 3. **Given** a Central de Boletins sem nenhum boletim, **When** é aberta, **Then** mostra "Nenhum boletim publicado ainda." em vez de uma lista vazia.
 4. **Given** o cadastro de boletim, **When** a Comunicação informa edição, data de referência, título, resumo e PDF, **Then** o boletim aparece no site a partir da data e hora de publicação escolhidas. Uma data futura deixa o boletim agendado e invisível até lá.
 5. **Given** o cadastro de boletim, **When** a edição já existe, o arquivo não é um PDF de verdade ou tem mais de 10 MB, **Then** o cadastro é recusado, respectivamente com "Já existe um boletim com a edição N.", "O arquivo precisa ser um PDF." ou "O PDF pode ter no máximo 10 MB.".
-6. **Given** um boletim publicado, **When** a Comunicação substitui o PDF ou exclui o boletim, **Then** o site passa a mostrar o novo arquivo, ou deixa de mostrar o boletim.
+6. **Given** um boletim publicado, **When** a Comunicação substitui o PDF ou exclui o boletim, **Then** o site passa a mostrar o novo arquivo, ou deixa de mostrar o boletim. **Given** o cadastro de boletim, **When** a Comunicação informa um link `https` em vez do PDF, **Then** "Ler boletim" abre o link em nova aba e "Baixar PDF" não aparece. PDF e link juntos, ou um link inválido, são recusados (BR-084, ADR-026).
 7. **Given** o cadastro de mensagem Palavra Viva, **When** o autor informa título, endereço da página, texto formatado, autor exibido, link opcional do YouTube e data de publicação, **Then** a mensagem aparece na seção Palavra Viva, da mais recente à mais antiga, 10 por página.
 8. **Given** uma mensagem com vídeo, **When** o leitor abre a página, **Then** o vídeo só carrega depois de um toque, e o link compartilhado mostra título, resumo e imagem.
 9. **Given** um texto com formatação fora da lista permitida (parágrafo, negrito, itálico, listas, links, citação e títulos), **When** é salvo, **Then** a formatação não permitida é removida e o editor avisa "Parte da formatação não é permitida e foi removida.".
@@ -387,7 +389,9 @@ O responsável técnico, a única pessoa técnica do time, é avisado no celular
   - a mensagem de boas-vindas;
   - o quadro de horários;
   - os avisos da campanha "Estamos Construindo" e da Ceia do Senhor, quando ativos;
-  - os botões do YouTube (ao vivo e canal) e do WhatsApp de atendimento.
+  - o convite para a Ficha de Visitante, com link para `/sou-visitante`;
+  - os botões do YouTube (ao vivo e canal) e do WhatsApp de atendimento;
+  - o convite para o Instagram da igreja, em nova aba, quando cadastrado nas redes sociais. O site MUST NOT embutir as publicações.
 - **FR-002**: O sistema MUST carregar horários, avisos, endereço, links, ministérios, grupos e dados PIX de dados editáveis no painel, nunca de texto fixo. Mudanças MUST aparecer no site em até 1 minuto, sem nova publicação.
 - **FR-003**: O sistema MUST exibir a página "Como chegar" com:
   - o endereço completo;
@@ -473,13 +477,13 @@ O responsável técnico, a única pessoa técnica do time, é avisado no celular
 **Boletins e Palavra Viva (História 5)**
 
 - **FR-038**: O sistema MUST listar os boletins publicados por data de referência, do mais recente ao mais antigo, 12 por página. Cada item mostra edição, data de referência, título e resumo. A lista MUST ter filtro por mês e ano e um estado vazio amigável.
-- **FR-039**: O membro MUST ver o resumo do boletim em texto, abrir o PDF no leitor nativo do aparelho (nova aba) e baixar o PDF. O site MUST NOT embutir um leitor de PDF próprio.
-- **FR-040**: O sistema MUST permitir cadastrar, editar, substituir o PDF e excluir boletins, com:
+- **FR-039**: O membro MUST ver o resumo do boletim em texto, abrir o PDF no leitor nativo do aparelho (nova aba) e baixar o PDF. O site MUST NOT embutir um leitor de PDF próprio. No boletim publicado por link (ADR-026), o membro MUST abrir o link em nova aba; o site MUST NOT embuti-lo.
+- **FR-040**: O sistema MUST permitir cadastrar, editar, substituir o PDF ou o link e excluir boletins, com:
   - edição única (inteiro positivo);
   - data de referência;
   - título de 3 a 150 caracteres;
   - resumo de até 5.000 caracteres;
-  - PDF verdadeiro com até 10 MB;
+  - PDF verdadeiro com até 10 MB **ou** link externo `https` (BR-084, ADR-026);
   - data/hora de publicação, com padrão "agora".
 - **FR-041**: Boletins e mensagens com data de publicação futura MUST ficar invisíveis no site até aquela data e hora, sem ação manual.
 - **FR-042**: O sistema MUST permitir cadastrar, editar e excluir mensagens Palavra Viva, com:

@@ -22,15 +22,16 @@ use Illuminate\Support\Carbon;
  * @property Carbon $reference_date
  * @property string $title
  * @property string|null $summary_text
- * @property string $pdf_path
- * @property int $pdf_size_bytes
+ * @property string|null $pdf_path Vazio quando o boletim é publicado por link (BR-084)
+ * @property int|null $pdf_size_bytes
+ * @property string|null $external_url Vazio quando o boletim tem PDF (BR-084)
  * @property Carbon $published_at
  */
 #[UseFactory(BulletinFactory::class)]
 #[Table(name: 'bulletins')]
 #[Fillable([
-    'edition_number', 'reference_date', 'title', 'summary_text', 'pdf_path', 'pdf_size_bytes', 'published_at',
-    'created_by', 'updated_by',
+    'edition_number', 'reference_date', 'title', 'summary_text', 'pdf_path', 'pdf_size_bytes', 'external_url',
+    'published_at', 'created_by', 'updated_by',
 ])]
 class Bulletin extends Model
 {

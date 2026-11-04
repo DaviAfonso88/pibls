@@ -66,6 +66,8 @@ function RegistrationSuccess({ event, done }: { event: PublicEvent; done: Regist
   useEffect(() => heading.current?.focus(), []);
 
   const { receipt } = done;
+  // O evento pode não pedir o nome (ADR-025): então a linha do participante não aparece
+  const participant = receipt.participant_name ?? done.participantName;
 
   return (
     <div
@@ -87,10 +89,14 @@ function RegistrationSuccess({ event, done }: { event: PublicEvent; done: Regist
         <dd className="m-0">{receipt.event_title ?? event.title}</dd>
         <dt className="font-bold">{text.successDate}</dt>
         <dd className="m-0">{formatDateTime(receipt.starts_at ?? event.starts_at)}</dd>
-        <dt className="font-bold">{text.successParticipant}</dt>
-        <dd className="m-0">{receipt.participant_name ?? done.participantName}</dd>
+        {participant !== "" ? (
+          <>
+            <dt className="font-bold">{text.successParticipant}</dt>
+            <dd className="m-0">{participant}</dd>
+          </>
+        ) : null}
       </dl>
-      <p className="m-0">{text.successEmail}</p>
+      {event.asks_email ? <p className="m-0">{text.successEmail}</p> : null}
       <Link
         to="/eventos"
         className="inline-flex min-h-11 items-center self-start font-bold underline"

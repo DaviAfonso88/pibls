@@ -18,7 +18,7 @@ Quem usa as fotos é `~/shared/ui/photo.tsx` (mesmos nomes e larguras); o texto 
 
 from pathlib import Path
 
-from PIL import Image, ImageOps
+from PIL import Image, ImageFilter, ImageOps
 
 ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / "assets-src"
@@ -37,7 +37,19 @@ PHOTOS = {
     "oracao": ("MG_0198.jpg", None),
     # Retrato (4032 × 2268 com a orientação do EXIF): recorta uma faixa 3:2 em volta do copo e do pão
     "ceia": ("20250302_112441.jpg", 0.45),
+    # Retrato (1080 × 1415): a faixa 3:2 vai da cabeça do rapaz mais alto aos joelhos e deixa de fora a legenda do topo
+    "juventude-salt": ("juventude-salt.jpeg", 0.45),
+    # Retrato (2252 × 4000): a faixa 3:2 vai da cabeça dos dois que estão em pé aos ombros dos três que estão à frente
+    "ministerios": ("20261018_112337 (2).jpg", 0.52),
+    # Retrato vindo do WhatsApp (720 × 1280): a faixa 3:2 vai da cabeça de quem ora às primeiras fileiras. As saídas acima de
+    # 720 px são ampliadas e ficam suaves em telas de alta densidade: troque pelo original do aparelho assim que houver
+    "igreja-em-oracao": ("WhatsApp Image 2026-11-01 at 12.15.11 PM.jpeg", 0.56),
 }
+
+# Originais que já chegam comprimidos e pequenos: mais qualidade e um pouco de nitidez, para não somar outra perda à deles.
+# Saem do conjunto quando o original bom chegar.
+LOW_RES_PHOTOS = {"igreja-em-oracao"}
+LOW_RES_QUALITY = 90
 
 # Retratos redondos (quadrados 1:1): nome publicado -> (arquivo original, centro vertical do recorte, 0 a 1).
 # Sem o original, o retrato é pulado: o site mostra as iniciais no lugar (ver `portraits` em `~/content/photos.ts`).
@@ -110,10 +122,14 @@ def make_photos() -> None:
         for width in WIDTHS:
             height = round(width * RATIO[1] / RATIO[0])
             resized = image.resize((width, height), Image.LANCZOS)
+            quality = WEBP_QUALITY
+            if name in LOW_RES_PHOTOS:
+                resized = resized.filter(ImageFilter.UnsharpMask(radius=1.4, percent=70, threshold=2))
+                quality = LOW_RES_QUALITY
             path = OUT / "images" / f"{name}-{width}.webp"
             path.parent.mkdir(parents=True, exist_ok=True)
             # Sem `exif=`: nada de metadados do original no arquivo publicado
-            resized.save(path, "WEBP", quality=WEBP_QUALITY, method=6)
+            resized.save(path, "WEBP", quality=quality, method=6)
             print(f"{path.relative_to(ROOT)}  {width}x{height}  {path.stat().st_size / 1024:.1f} KB")
 
 

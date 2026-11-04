@@ -65,8 +65,9 @@ export const eventAdminMessages = {
     slugRequired: "Escreva um nome para gerar o endereço.",
     slugInvalid: "Use só letras minúsculas, números e hífens, sem acento.",
     ministry: "Ministério responsável",
-    ministryRequired: "Escolha o ministério.",
-    ministryPlaceholder: "Escolha…",
+    noMinistry: "Sem ministério responsável",
+    ministryHint:
+      "Sem ministério, o evento é geral: todos que gerenciam eventos, inclusive os líderes de ministério, veem e editam.",
     startsAt: "Começa",
     endsAt: "Termina",
     optionalEnd: "Se o evento não tem hora para acabar, deixe em branco.",
@@ -159,12 +160,22 @@ export const eventAdminMessages = {
   builder: {
     section: "Formulário de inscrição",
     intro: "Peça só o que a organização realmente precisa.",
-    fixedLabel: "Campos que o formulário sempre pede",
-    fixed: [
-      { name: "Nome completo", rule: "Sempre pedido · obrigatório" },
-      { name: "WhatsApp", rule: "Sempre pedido · obrigatório" },
-      { name: "E-mail", rule: "Sempre pedido · opcional" },
-    ],
+    fixedLabel: "Campos padrão do formulário",
+    fixed: {
+      asks_participant_name: {
+        label: "Nome completo",
+        on: "Aparece · obrigatório",
+        off: "Não aparece",
+      },
+      asks_phone: { label: "Telefone", on: "Aparece · obrigatório", off: "Não aparece" },
+      asks_email: {
+        label: "E-mail",
+        on: "Aparece · opcional · envia a confirmação",
+        off: "Não aparece · sem e-mail de confirmação",
+      },
+    },
+    duplicatesAllowed:
+      "Sem o nome ou sem o telefone, o sistema não consegue barrar a inscrição repetida da mesma pessoa.",
     questionsLabel: "Perguntas do evento",
     question: "Pergunta",
     questionRequired: "Escreva a pergunta.",
@@ -198,7 +209,7 @@ export const eventAdminMessages = {
     add: "Adicionar pergunta",
     limit: (max: number): string => `O formulário chegou ao limite de ${max} perguntas.`,
     count: (count: number, max: number): string => `${count} de ${max} perguntas`,
-    empty: "Nenhuma pergunta extra. O formulário pede só o nome, o WhatsApp e o e-mail.",
+    empty: "Nenhuma pergunta extra. O formulário pede só os campos padrão ligados acima.",
     remove: (label: string): string => `Remover a pergunta ${label === "" ? "sem título" : label}`,
     moveUp: (label: string): string =>
       `Mover a pergunta ${label === "" ? "sem título" : label} para cima`,
