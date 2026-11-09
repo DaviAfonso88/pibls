@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\Route;
 | são criados, alterados e desativados no phpMyAdmin.
 */
 
-function asDirectoryReader(string $role = 'PASTORAL'): void
+function asDirectoryReader(string $role = 'ADMIN_TECNICO'): void
 {
     test()->actingAs(userWithRole($role, ['name' => 'Aaa Leitor']))
         ->withSession([EnforceSessionLimits::LOGIN_AT => time()]);
@@ -36,7 +36,7 @@ it('lista os usuários com papéis, permissões e ministério, para quem tem use
         'permissions' => ['eventos.inscricoes.read.own', 'eventos.write.own'],
         'last_login_at' => null,
     ]);
-})->with(['pastoral' => 'PASTORAL', 'administrador técnico' => 'ADMIN_TECNICO']);
+})->with(['administrador técnico' => 'ADMIN_TECNICO']);
 
 it('nunca devolve senha, token de lembrança nem hash', function () {
     asDirectoryReader();
@@ -145,8 +145,8 @@ it('BR-077 nenhuma rota registrada cria, altera ou apaga usuários e permissões
     expect($writes)->toBe([]);
 });
 
-it('quem não tem users.read recebe 403, mesmo autenticado', function () {
-    asDirectoryReader('COMUNICACAO');
+it('quem não tem users.read recebe 403, mesmo autenticado (ADR-028: a Pastoral não lê o diretório)', function (string $role) {
+    asDirectoryReader($role);
 
     $this->getJson('/api/admin/users')->assertForbidden();
-});
+})->with(['COMUNICACAO', 'PASTORAL']);

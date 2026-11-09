@@ -36,7 +36,8 @@ return [
         'users.read' => ['Ver o diretório de usuários', false],
     ],
 
-    // Papéis de referência (papel => permissões). ADMIN_TECNICO tem só `users.read` na aplicação (menor privilégio).
+    // Papéis de referência (papel => permissões). ADMIN_TECNICO lê o diretório de usuários e gerencia as configurações
+    // gerais (ADR-028). Mudança em papel que já está em produção entra por migration `…_adjust_role_templates_*.php`.
     'role_templates' => [
         'COMUNICACAO' => [
             'boletins.write',
@@ -47,6 +48,7 @@ return [
             'settings.write',
         ],
         'SECRETARIA' => [
+            'boletins.write',
             'eventos.inscricoes.read',
             'leads.read',
             'leads.manage',
@@ -63,14 +65,16 @@ return [
         'PASTORAL' => [
             'mensagens.write',
             'leads.read',
+            'leads.manage',
             'leads.oracao.read',
-            'users.read',
+            'leads.oracao.manage',
         ],
         'LIDER_MINISTERIO' => [
             'eventos.write.own',
             'eventos.inscricoes.read.own',
         ],
         'ADMIN_TECNICO' => [
+            'settings.write',
             'users.read',
         ],
     ],

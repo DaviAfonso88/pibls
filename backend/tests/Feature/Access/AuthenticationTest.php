@@ -35,7 +35,7 @@ it('entra com e-mail e senha corretos e devolve o usuário com papéis e permiss
         ->assertJsonPath('data.ministry', null)
         ->assertJsonPath('data.roles', ['SECRETARIA'])
         ->assertJsonPath('data.permissions', [
-            'eventos.inscricoes.read', 'leads.manage', 'leads.read', 'ministerios.write', 'settings.write',
+            'boletins.write', 'eventos.inscricoes.read', 'leads.manage', 'leads.read', 'ministerios.write', 'settings.write',
         ])
         ->assertJsonMissingPath('data.password');
 

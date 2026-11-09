@@ -199,11 +199,14 @@ it('há um Gate para cada chave do catálogo', function () {
     }
 });
 
-it('os modelos dos 7 papéis existem e o administrador técnico só lê o diretório de usuários', function () {
+it('ADR-028 os modelos dos 7 papéis existem e o administrador técnico só lê usuários e gerencia as configurações', function () {
     $templates = roleTemplates();
 
     expect(array_keys($templates))->toEqualCanonicalizing(ROLE_CODES)
-        ->and($templates['ADMIN_TECNICO'])->toBe(['users.read']);
+        ->and($templates['ADMIN_TECNICO'])->toEqualCanonicalizing(['settings.write', 'users.read'])
+        ->and($templates['SECRETARIA'])->toContain('boletins.write')
+        ->and($templates['PASTORAL'])->toContain('leads.manage', 'leads.oracao.manage')
+        ->and($templates['PASTORAL'])->not->toContain('users.read');
 });
 
 it('as permissões são aditivas: quem tem dois papéis recebe a união', function () {
@@ -218,10 +221,13 @@ it('as permissões são aditivas: quem tem dois papéis recebe a união', functi
         ->getJson('/api/auth/me')
         ->assertOk()
         ->assertJsonPath('data.roles', ['PASTORAL', 'TESOURARIA'])
-        ->assertJsonPath('data.permissions', ['leads.oracao.read', 'leads.read', 'mensagens.write', 'pix.write', 'users.read']);
+        ->assertJsonPath('data.permissions', [
+            'leads.manage', 'leads.oracao.manage', 'leads.oracao.read', 'leads.read', 'mensagens.write', 'pix.write',
+        ]);
 
     expect(Gate::forUser($user)->allows('pix.write'))->toBeTrue()
-        ->and(Gate::forUser($user)->allows('leads.manage'))->toBeFalse();
+        ->and(Gate::forUser($user)->allows('boletins.write'))->toBeFalse()
+        ->and(Gate::forUser($user)->allows('users.read'))->toBeFalse();
 });
 
 // ───────────────────────────── BR-075: escopo próprio ─────────────────────────────

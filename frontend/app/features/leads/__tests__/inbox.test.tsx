@@ -608,8 +608,9 @@ describe("Detalhe do contato", () => {
     expect(window.localStorage.length).toBe(0);
   });
 
-  it("quem só lê (pastoral) vê o contato e o WhatsApp, sem atender nem excluir", async () => {
-    mockMe(userFixture("PASTORAL"));
+  it("quem só lê vê o contato e o WhatsApp, sem atender nem excluir", async () => {
+    // Desde o ADR-028 nenhum papel de referência só lê contatos: o perfil é montado à mão, como no phpMyAdmin
+    mockMe(userFixture("PASTORAL", { permissions: ["leads.read", "leads.oracao.read"] }));
     mockLead(5, detail(5));
 
     renderAdmin("/admin/contatos/5");

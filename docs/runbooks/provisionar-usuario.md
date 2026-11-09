@@ -16,12 +16,12 @@ Cada papel é um modelo em `role_templates`; o que vale para o usuário é a có
 | Papel (`role_code`) | Pode | Precisa de ministério? |
 |---|---|:-:|
 | `COMUNICACAO` | Boletins, Palavra Viva, eventos e inscrições, ministérios/grupos, configurações | Não |
-| `SECRETARIA` | Contatos gerais (ver e atender), inscrições, ministérios/grupos, configurações | Não |
+| `SECRETARIA` | Boletins, contatos gerais (ver e atender), inscrições, ministérios/grupos, configurações | Não |
 | `TESOURARIA` | Dados PIX | Não |
 | `ORACAO` | Pedidos de oração (ver e atender) | Não |
-| `PASTORAL` | Ver contatos e pedidos de oração, Palavra Viva, diretório de usuários | Não |
+| `PASTORAL` | Contatos e pedidos de oração (ver e atender), Palavra Viva | Não |
 | `LIDER_MINISTERIO` | Eventos e inscrições **só do próprio ministério** | **Sim** (BR-075) |
-| `ADMIN_TECNICO` | Só o diretório de usuários na aplicação (menor privilégio) | Não |
+| `ADMIN_TECNICO` | Diretório de usuários e configurações gerais na aplicação (menor privilégio, ADR-028) | Não |
 
 A lista exata de permissões de cada papel está em `SELECT role_code, permission_key FROM role_templates ORDER BY 1, 2;`. Uma permissão terminada em `.own` sem `users.ministry_id` preenchido **não concede nada** (BR-075).
 
@@ -95,6 +95,25 @@ UPDATE users SET ministry_id = <novo id>, updated_at = NOW() WHERE id = <id>;
 ```
 
 Para trocar `COMUNICACAO` por `SECRETARIA`, tire um e dê o outro (seção 2).
+
+### Depois de uma mudança no modelo do papel (ADR-028)
+
+O modelo em `role_templates` só vale para usuários **novos**. Quem já existe mantém a cópia antiga em `user_permissions`. Para alinhar os usuários existentes com o modelo atual do papel (ajuste de 2026-11-09), rode, trocando `<PAPEL>`:
+
+```sql
+-- Acrescenta o que o modelo ganhou
+INSERT IGNORE INTO user_permissions (user_id, role_code, permission_key)
+SELECT DISTINCT up.user_id, rt.role_code, rt.permission_key
+FROM user_permissions up
+JOIN role_templates rt ON rt.role_code = up.role_code
+WHERE up.role_code = '<PAPEL>';
+
+-- Tira o que o modelo perdeu (PASTORAL perdeu users.read)
+DELETE FROM user_permissions
+WHERE role_code = 'PASTORAL' AND permission_key = 'users.read';
+```
+
+Faça para `SECRETARIA`, `PASTORAL` e `ADMIN_TECNICO`, e só o `DELETE` para `PASTORAL`. Confira com `SELECT role_code, permission_key FROM role_templates ORDER BY 1, 2;`.
 
 ## 4. Desativar (desligamento)
 
