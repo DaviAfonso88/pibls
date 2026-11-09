@@ -31,7 +31,7 @@ export default function PedidoDeOracao() {
             priority
             sizes="(min-width: 704px) 640px, calc(100vw - 2rem)"
             className="aspect-21/9 rounded-2xl"
-            imgClassName="object-[50%_35%]"
+            imgClassName="object-top"
           />
         }
       />

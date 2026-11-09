@@ -20,7 +20,10 @@ use Throwable;
  * Nada que o cliente informa é confiado: nem o nome, nem a extensão, nem o `Content-Type`. O tipo vem do conteúdo
  * (`finfo` + assinatura do arquivo), o tamanho é conferido e o nome é aleatório. Imagens são decodificadas e
  * reencodadas pelo GD, o que apaga EXIF e qualquer carga escondida depois do fim da imagem (polyglot).
- * PDF não dá para reencodar; por isso, além do MIME e da assinatura `%PDF-`, é recusado se levar uma tag PHP.
+ * PDF não dá para reencodar; por isso, além do MIME e da assinatura `%PDF-`, é recusado se levar `<?php` seguido de um
+ * espaço, a abertura que o PHP executa. `<?=` não é procurado: são só 3 bytes, que surgem por acaso no conteúdo
+ * comprimido de um PDF verdadeiro e o faziam ser recusado (quase 1 em 2 num arquivo de 10 MB). Quem impede a execução
+ * em `uploads/` é o `.htaccess` da pasta, além do nome aleatório com extensão `.pdf`.
  *
  * Tipo errado responde 422; arquivo acima do limite, 413 (BR-041, BR-045).
  */
@@ -98,8 +101,9 @@ final class UploadStore
             throw new PostTooLargeException($kind->tooLargeMessage());
         }
 
+        // Não diz que o tipo está errado: o arquivo pode ser bom e só não ter chegado (conexão caiu, servidor sem espaço)
         if (! $file->isValid() || $file->getRealPath() === false) {
-            throw ValidationException::withMessages([$field => [$kind->invalidTypeMessage()]]);
+            throw ValidationException::withMessages([$field => ['O arquivo não chegou inteiro. Envie de novo.']]);
         }
 
         if ((int) $file->getSize() > $kind->maxBytes()) {
@@ -224,7 +228,7 @@ final class UploadStore
             $carry = '';
             while (! feof($handle)) {
                 $chunk = $carry.(string) fread($handle, 1024 * 1024);
-                if (preg_match('/<\?(?:php|=)/i', $chunk) === 1) {
+                if (preg_match('/<\?php\s/i', $chunk) === 1) {
                     return true;
                 }
                 $carry = substr($chunk, -8); // a tag pode cair na divisa entre dois blocos

@@ -79,6 +79,49 @@ test.describe("página inicial @us1", () => {
     await expectNoSeriousA11yViolations(page);
   });
 
+  test("convida para o Instagram cadastrado nas configurações, em nova aba", async ({
+    page,
+  }) => {
+    await serveFixture(page, "settings");
+    await page.goto("/");
+
+    const section = page.getByRole("region", {
+      name: "Acompanhe a igreja no Instagram",
+    });
+    const link = section.getByRole("link", { name: /Visitar o Instagram/ });
+    await expect(link).toHaveAttribute(
+      "href",
+      "https://instagram.example.com/exemplo",
+    );
+    await expect(link).toHaveAttribute("target", "_blank");
+    await expect(link).toHaveAttribute("rel", "noopener noreferrer");
+    await expect(section.getByText("@exemplo")).toBeVisible();
+    await expectNoSeriousA11yViolations(page);
+  });
+
+  test("convida para a Ficha de Visitante e leva ao formulário", async ({
+    page,
+  }) => {
+    await page.goto("/");
+
+    const section = page.getByRole("region", {
+      name: "É visitante? A gente quer conhecer você.",
+    });
+    await expect(section.getByRole("img")).toBeVisible();
+    await expectNoSeriousA11yViolations(page);
+
+    await section
+      .getByRole("link", { name: /Preencher a Ficha de Visitante/ })
+      .click();
+    await expect(page).toHaveURL(/\/sou-visitante$/);
+    await expect(
+      page.getByRole("heading", {
+        level: 1,
+        name: "Que bom ter você aqui!",
+      }),
+    ).toBeVisible();
+  });
+
   test("o menu do site público não gera rolagem horizontal da página", async ({
     page,
   }) => {
@@ -281,7 +324,7 @@ test.describe("grupos e células @us1", () => {
 });
 
 test.describe("quem somos @us1", () => {
-  test("mostra a idade, a linha do tempo, os 8 ex-pastores e a Declaração de Fé", async ({
+  test("mostra a idade, a linha do tempo, os 9 ex-pastores e a Declaração de Fé", async ({
     page,
   }) => {
     await page.goto("/quem-somos");
@@ -295,10 +338,9 @@ test.describe("quem somos @us1", () => {
     ).toBeVisible();
     await expect(
       page
-        .getByRole("heading", { name: "Pastores que serviram a igreja" })
-        .locator("..")
+        .getByRole("region", { name: "Pastores que serviram a igreja" })
         .getByRole("listitem"),
-    ).toHaveCount(8);
+    ).toHaveCount(9);
     await expect(
       page.getByRole("link", { name: /Ler a Declaração de Fé/ }),
     ).toHaveAttribute("href", /convencaobatista\.com\.br/);

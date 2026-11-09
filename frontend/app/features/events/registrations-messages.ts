@@ -40,11 +40,14 @@ export const registrationsAdminMessages = {
   actions: "Ações",
 
   cancel: "Cancelar",
-  cancelOf: (name: string): string => `Cancelar a inscrição de ${name}`,
-  cancelTitle: (name: string): string => `Cancelar a inscrição de ${name}?`,
+  // O nome é nulo quando o evento não o pede (ADR-025)
+  cancelOf: (name: string | null, when: string): string =>
+    name ? `Cancelar a inscrição de ${name}` : `Cancelar a inscrição feita em ${when}`,
+  cancelTitle: (name: string | null): string =>
+    name ? `Cancelar a inscrição de ${name}?` : "Cancelar esta inscrição?",
   /** BR-034. */
-  cancelDescription: (name: string): string =>
-    `A inscrição de ${name} será excluída definitivamente e a vaga liberada. Confirmar?`,
+  cancelDescription: (name: string | null): string =>
+    `A inscrição${name ? ` de ${name}` : ""} será excluída definitivamente e a vaga liberada. Confirmar?`,
   /** Do design (AdminInscritos): o que fazer depois de cancelar. A frase de BR-034 acima segue como está (architecture.md). */
   cancelHint:
     "A vaga volta a ficar disponível no site. Avise a pessoa pelo WhatsApp, se for o caso.",

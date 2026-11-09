@@ -143,7 +143,7 @@
             },
             "post": {
                 "operationId": "admin.bulletins.store",
-                "summary": "`POST /api/admin/bulletins`: cadastra com o PDF (BR-040, BR-041)",
+                "summary": "`POST /api/admin/bulletins`: cadastra com o PDF ou com o link externo (BR-040, BR-041, BR-084)",
                 "tags": [
                     "AdminBulletin"
                 ],
@@ -240,7 +240,7 @@
             },
             "patch": {
                 "operationId": "admin.bulletins.update",
-                "summary": "`PATCH /api/admin/bulletins/{id}`: altera os metadados",
+                "summary": "`PATCH /api/admin/bulletins/{id}`: altera os metadados; com `external_url`, o link toma o lugar do PDF (BR-084)",
                 "tags": [
                     "AdminBulletin"
                 ],
@@ -334,7 +334,7 @@
         "/admin/bulletins/{bulletin}/pdf": {
             "post": {
                 "operationId": "admin.bulletins.pdf",
-                "summary": "`POST /api/admin/bulletins/{id}/pdf`: troca o PDF; o anterior \u00e9 apagado do disco",
+                "summary": "`POST /api/admin/bulletins/{id}/pdf`: troca o PDF, ou o link, pelo arquivo novo; o PDF anterior \u00e9 apagado do disco",
                 "tags": [
                     "AdminBulletin"
                 ],
@@ -571,7 +571,7 @@
         "/admin/events/{event}": {
             "get": {
                 "operationId": "admin.events.show",
-                "summary": "`GET /api/admin/events/{id}`: o evento, para editar",
+                "summary": "`GET /api/admin/events/{id}`: o evento, para editar ou para a tela de inscritos (ADR-027)",
                 "tags": [
                     "AdminEvents"
                 ],
@@ -1413,6 +1413,17 @@
                             ],
                             "minimum": 1,
                             "maximum": 100
+                        }
+                    },
+                    {
+                        "name": "q",
+                        "in": "query",
+                        "schema": {
+                            "type": [
+                                "string",
+                                "null"
+                            ],
+                            "maxLength": 120
                         }
                     }
                 ],
@@ -2641,6 +2652,17 @@
                             "minimum": 1,
                             "maximum": 100
                         }
+                    },
+                    {
+                        "name": "q",
+                        "in": "query",
+                        "schema": {
+                            "type": [
+                                "string",
+                                "null"
+                            ],
+                            "maxLength": 120
+                        }
                     }
                 ],
                 "responses": {
@@ -2774,7 +2796,10 @@
                                                     "type": "string"
                                                 },
                                                 "participant_name": {
-                                                    "type": "string"
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
                                                 },
                                                 "starts_at": {
                                                     "type": [
@@ -3665,13 +3690,19 @@
             },
             "RegisterForEventRequest": {
                 "type": "object",
-                "description": "`POST /api/public/events/{slug}/register` (contracts/openapi.yaml \u2192 RegistrationInput; BR-001, BR-004). Aqui s\u00f3 o\nque n\u00e3o depende do evento: o formato dos campos fixos. Quem exige o respons\u00e1vel, o consentimento de sa\u00fade e as\nrespostas \u00e9 a Action, contra o formul\u00e1rio vigente lido sob o bloqueio do evento (BR-023, BR-024, BR-083).",
+                "description": "`POST /api/public/events/{slug}/register` (contracts/openapi.yaml \u2192 RegistrationInput; BR-001, BR-004). Aqui s\u00f3 o\nque n\u00e3o depende do evento: o formato dos campos fixos. Quem exige o nome e o telefone (o evento pode n\u00e3o pedi-los,\nADR-025), o respons\u00e1vel, o consentimento de sa\u00fade e as respostas \u00e9 a Action, contra o formul\u00e1rio vigente lido sob o\nbloqueio do evento (BR-023, BR-024, BR-083).",
                 "properties": {
                     "participant_name": {
-                        "type": "string"
+                        "type": [
+                            "string",
+                            "null"
+                        ]
                     },
                     "phone": {
-                        "type": "string"
+                        "type": [
+                            "string",
+                            "null"
+                        ]
                     },
                     "email": {
                         "type": [
@@ -3718,8 +3749,6 @@
                     }
                 },
                 "required": [
-                    "participant_name",
-                    "phone",
                     "consent"
                 ],
                 "title": "RegisterForEventRequest"
@@ -3769,7 +3798,7 @@
             },
             "StoreBulletinRequest": {
                 "type": "object",
-                "description": "`POST /api/admin/bulletins` (multipart): metadados e o PDF. O tipo e o tamanho do PDF s\u00e3o conferidos pelo\n`UploadStore` (422 para tipo errado, 413 para mais de 10 MB, BR-041), e n\u00e3o aqui.",
+                "description": "`POST /api/admin/bulletins`: metadados e o PDF (multipart) ou o link externo (BR-084). O tipo e o tamanho do PDF s\u00e3o\nconferidos pelo `UploadStore` (422 para tipo errado, 413 para mais de 10 MB, BR-041), e n\u00e3o aqui.",
                 "properties": {
                     "edition_number": {
                         "type": "integer",
@@ -3803,19 +3832,24 @@
                         "type": "string",
                         "format": "binary",
                         "contentMediaType": "application/octet-stream"
+                    },
+                    "external_url": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
                     }
                 },
                 "required": [
                     "edition_number",
                     "reference_date",
-                    "title",
-                    "pdf"
+                    "title"
                 ],
                 "title": "StoreBulletinRequest"
             },
             "StoreEventRequest": {
                 "type": "object",
-                "description": "`POST /api/admin/events`: o evento inteiro (contracts/openapi.yaml \u2192 EventInput). Quem s\u00f3 tem `eventos.write.own` cria\napenas no pr\u00f3prio minist\u00e9rio (403 nos outros). As datas sem fuso valem em Bras\u00edlia. A coer\u00eancia das datas (BR-025,\nBR-026) e as regras do formul\u00e1rio (BR-031) v\u00eam depois: as primeiras, da Action; as do formul\u00e1rio, daqui.",
+                "description": "`POST /api/admin/events`: o evento inteiro (contracts/openapi.yaml \u2192 EventInput). Quem s\u00f3 tem `eventos.write.own` cria\napenas no pr\u00f3prio minist\u00e9rio (403 nos outros). O minist\u00e9rio respons\u00e1vel \u00e9 opcional para todos: sem ele, o evento \u00e9 geral\n(ADR-025). As datas sem fuso valem em Bras\u00edlia. A coer\u00eancia das datas (BR-025,\nBR-026) e as regras do formul\u00e1rio (BR-031) v\u00eam depois: as primeiras, da Action; as do formul\u00e1rio, daqui.",
                 "properties": {
                     "title": {
                         "type": "string",
@@ -3828,7 +3862,10 @@
                         "maxLength": 160
                     },
                     "ministry_id": {
-                        "type": "integer"
+                        "type": [
+                            "integer",
+                            "null"
+                        ]
                     },
                     "description": {
                         "type": "string",
@@ -3870,6 +3907,24 @@
                             "null"
                         ]
                     },
+                    "asks_participant_name": {
+                        "type": [
+                            "boolean",
+                            "null"
+                        ]
+                    },
+                    "asks_phone": {
+                        "type": [
+                            "boolean",
+                            "null"
+                        ]
+                    },
+                    "asks_email": {
+                        "type": [
+                            "boolean",
+                            "null"
+                        ]
+                    },
                     "is_published": {
                         "type": [
                             "boolean",
@@ -3889,7 +3944,6 @@
                 "required": [
                     "title",
                     "slug",
-                    "ministry_id",
                     "description",
                     "starts_at",
                     "location"
@@ -4043,7 +4097,7 @@
             },
             "UpdateBulletinRequest": {
                 "type": "object",
-                "description": "`PATCH /api/admin/bulletins/{id}`: s\u00f3 os metadados; todos opcionais. O PDF troca por `POST \u2026/pdf`.",
+                "description": "`PATCH /api/admin/bulletins/{id}`: os metadados e o link externo; todos opcionais. O PDF troca por `POST \u2026/pdf`.\nMandar `external_url` faz o boletim passar a usar o link (BR-084); o caminho de volta \u00e9 enviar um PDF.",
                 "properties": {
                     "edition_number": {
                         "type": "integer",
@@ -4069,13 +4123,16 @@
                     "published_at": {
                         "type": "string",
                         "format": "date-time"
+                    },
+                    "external_url": {
+                        "type": "string"
                     }
                 },
                 "title": "UpdateBulletinRequest"
             },
             "UpdateEventRequest": {
                 "type": "object",
-                "description": "`PATCH /api/admin/events/{id}`: os mesmos campos do cadastro, todos opcionais. Serve tamb\u00e9m para publicar e despublicar\n(`is_published`) e para \"Encerrar inscri\u00e7\u00f5es\" (`registration_deadline` = agora). Evento de outro minist\u00e9rio, para quem s\u00f3\ntem `.own`, \u00e9 404 (BR-030); passar o evento para outro minist\u00e9rio exige poder escrever nos dois.",
+                "description": "`PATCH /api/admin/events/{id}`: os mesmos campos do cadastro, todos opcionais. Serve tamb\u00e9m para publicar e despublicar\n(`is_published`) e para \"Encerrar inscri\u00e7\u00f5es\" (`registration_deadline` = agora). Evento de outro minist\u00e9rio, para quem s\u00f3\ntem `.own`, \u00e9 404 (BR-030); passar o evento para outro minist\u00e9rio exige poder escrever nos dois. Deix\u00e1-lo sem\nminist\u00e9rio (`ministry_id: null`) o torna geral, que qualquer um com permiss\u00e3o de escrita de eventos gerencia (ADR-025).",
                 "properties": {
                     "title": {
                         "type": "string",
@@ -4088,7 +4145,10 @@
                         "maxLength": 160
                     },
                     "ministry_id": {
-                        "type": "integer"
+                        "type": [
+                            "integer",
+                            "null"
+                        ]
                     },
                     "description": {
                         "type": "string",
@@ -4125,6 +4185,15 @@
                         "format": "date-time"
                     },
                     "has_minors": {
+                        "type": "boolean"
+                    },
+                    "asks_participant_name": {
+                        "type": "boolean"
+                    },
+                    "asks_phone": {
+                        "type": "boolean"
+                    },
+                    "asks_email": {
                         "type": "boolean"
                     },
                     "is_published": {

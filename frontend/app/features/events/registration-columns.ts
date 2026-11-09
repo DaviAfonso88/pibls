@@ -49,7 +49,7 @@ export function registrationColumns(
     {
       id: "participant_name",
       header: "Nome",
-      text: (registration) => registration.participant_name,
+      text: (registration) => registration.participant_name ?? "",
     },
     { id: "phone", header: "Telefone", text: (registration) => phoneText(registration.phone) },
     { id: "email", header: "E-mail", text: (registration) => registration.email ?? "" },

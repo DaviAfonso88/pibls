@@ -12,8 +12,7 @@ import { YouTubeFacade } from "~/shared/ui/youtube-facade";
 import { isApiError } from "~/shared/http/errors";
 import { absoluteUrl } from "~/shared/seo/meta";
 import { publicContentMessages as text } from "../messages";
-import { postQuery, postsQuery, type PostDetail } from "../public-api";
-import { postPath } from "./post-list";
+import { postPath, postQuery, postsQuery, type PostDetail } from "../public-api";
 
 /** Compartilhar pelo WhatsApp: abre o WhatsApp com o título e o endereço da mensagem. */
 function whatsappShareUrl(post: PostDetail): string {

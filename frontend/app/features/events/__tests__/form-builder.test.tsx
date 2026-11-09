@@ -72,19 +72,9 @@ function Builder({
 const questions = () => screen.queryAllByRole("textbox", { name: /^Pergunta/ });
 
 describe("adicionar e preencher perguntas", () => {
-  it("começa sem perguntas extras, mostrando o que o formulário sempre pede", () => {
+  it("começa sem perguntas extras (os campos padrão ficam no formulário do evento)", () => {
     render(<Builder />);
 
-    const fixed = screen.getByRole("list", { name: "Campos que o formulário sempre pede" });
-    expect(
-      within(fixed)
-        .getAllByRole("listitem")
-        .map((item) => item.textContent),
-    ).toEqual([
-      "Nome completoSempre pedido · obrigatório",
-      "WhatsAppSempre pedido · obrigatório",
-      "E-mailSempre pedido · opcional",
-    ]);
     expect(screen.getByText(/Nenhuma pergunta extra/)).toBeVisible();
     expect(screen.getByText("0 de 30 perguntas")).toBeVisible();
     expect(questions()).toHaveLength(0);

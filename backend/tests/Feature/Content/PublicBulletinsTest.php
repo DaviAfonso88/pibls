@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Modules\Content\Actions\LoadHomeHighlights;
 use App\Modules\Content\Models\Bulletin;
 
 use function Pest\Laravel\getJson;
@@ -33,9 +34,27 @@ it('responde 200 com {data, meta}, o formato BulletinPublic e cache público de 
                 'summary_text' => 'Resumo.',
                 'pdf_url' => '/uploads/boletins/2026/3f9c1b2a3f9c1b2a3f9c1b2a3f9c1b2a.pdf',
                 'pdf_size_bytes' => 1843200,
+                'external_url' => null,
             ]],
             'meta' => ['page' => 1, 'per_page' => 12, 'total' => 1, 'last_page' => 1],
         ]);
+});
+
+it('BR-084 o boletim por link aparece na lista e nos destaques da home, sem os campos do PDF', function () {
+    Bulletin::factory()->linked()->create(['edition_number' => 77, 'published_at' => now()->subDay()]);
+
+    getJson('/api/public/bulletins')
+        ->assertOk()
+        ->assertJsonPath('data.0.edition_number', 77)
+        ->assertJsonPath('data.0.external_url', 'https://heyzine.com/flip-book/4954dbb36f.html')
+        ->assertJsonPath('data.0.pdf_url', null)
+        ->assertJsonPath('data.0.pdf_size_bytes', null);
+
+    expect(app(LoadHomeHighlights::class)()['latest_bulletin'])->toMatchArray([
+        'edition_number' => 77,
+        'external_url' => 'https://heyzine.com/flip-book/4954dbb36f.html',
+        'pdf_url' => null,
+    ]);
 });
 
 it('pagina de 12 em 12', function () {
@@ -107,6 +126,6 @@ it('não expõe campos do painel nem o caminho interno do arquivo', function () 
 
     $item = getJson('/api/public/bulletins')->assertOk()->json('data.0');
 
-    expect(array_keys($item))->toBe(['id', 'edition_number', 'reference_date', 'title', 'summary_text', 'pdf_url', 'pdf_size_bytes'])
+    expect(array_keys($item))->toBe(['id', 'edition_number', 'reference_date', 'title', 'summary_text', 'pdf_url', 'pdf_size_bytes', 'external_url'])
         ->and($item['pdf_url'])->toStartWith('/uploads/boletins/');
 });

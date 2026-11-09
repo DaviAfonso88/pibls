@@ -11,6 +11,10 @@ import { contentAdminMessages } from "../../admin-messages";
 
 const { draft: draftText, schedule: scheduleText, list: listText } = contentAdminMessages;
 
+/** Uma opção de escolha em cartão, com o rótulo e o rádio na mesma área de toque (design: "Quando publicar"). */
+export const radioOption =
+  "flex min-h-12 items-center gap-2.5 rounded-[10px] border border-border-strong px-3.5";
+
 /** Um bloco do formulário (design: cartão branco com título). */
 export function FormSection({
   title,
@@ -84,14 +88,11 @@ export function PublishWhen({
   error?: string;
   disabled?: boolean;
 }) {
-  const option =
-    "flex min-h-12 items-center gap-2.5 rounded-[10px] border border-border-strong px-3.5";
-
   return (
     <>
       <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
         <legend className="mb-2 text-lg font-extrabold">{scheduleText.legend}</legend>
-        <label className={option}>
+        <label className={radioOption}>
           <input
             type="radio"
             name={name}
@@ -102,7 +103,7 @@ export function PublishWhen({
           />
           {scheduleText.now}
         </label>
-        <label className={option}>
+        <label className={radioOption}>
           <input
             type="radio"
             name={name}

@@ -191,7 +191,7 @@ O sistema inclui um **Painel Administrativo restrito** (`/admin`) em que a equip
 
 | ID | Decisão |
 |---|---|
-| RF-D01 | **Escopo por ministério nos eventos**: um evento pertence a um ministério (`ministry_id`). Permissões com sufixo `.own` limitam o operador aos eventos do seu ministério; a API aplica a regra. |
+| RF-D01 | **Escopo por ministério nos eventos**: um evento pertence a um ministério (`ministry_id`). Permissões com sufixo `.own` limitam o operador aos eventos do seu ministério; a API aplica a regra. *Ajuste (ADR-025)*: o ministério é opcional. Evento sem ministério é um evento geral, que também entra no escopo de quem tem `.own`. |
 | RF-D02 | **Conteúdo fixo × editável**: história, linha do tempo, ex-pastores, biografia pastoral, texto sobre a CBB e Política de Privacidade ficam **no código** (mudam com deploy e são pré-renderizados). Todo o resto vem **do banco** e é editável pelo painel. |
 | RF-D03 | **Pedido de oração anônimo**: nome e contato são opcionais; só o texto do pedido é obrigatório. |
 | RF-D04 | **Células de CL**: a API pública expõe só bairro, dia/horário e contato. O endereço residencial fica no banco e só aparece no painel. |
@@ -227,7 +227,7 @@ O sistema inclui um **Painel Administrativo restrito** (`/admin`) em que a equip
 | Capacidade | Dados expostos | Regras de exposição |
 |---|---|---|
 | CAP-01 Conteúdo institucional | Quadro de horários, avisos (campanha, Ceia), links (YouTube, WhatsApp, redes), endereço e mapas, ministérios ativos (nome, atribuições, líderes), grupos e Células de CL | Só itens ativos. Células: **sem endereço residencial** (RF-D04). Configurações: só as chaves de uma **lista de permissão pública**; destinatários de e-mail e qualquer dado interno nunca saem pela API pública. |
-| CAP-02 Boletins | Edição, data de referência, título, resumo, URL do PDF | `published_at <= agora`; ordenação por `reference_date` decrescente; filtro por ano e mês; paginação de 12 itens |
+| CAP-02 Boletins | Edição, data de referência, título, resumo, URL do PDF ou link externo (ADR-026) | `published_at <= agora`; ordenação por `reference_date` decrescente; filtro por ano e mês; paginação de 12 itens |
 | CAP-03 Mensagens Palavra Viva | Título, slug, texto formatado, autor exibido, link do YouTube, data | `published_at <= agora`; ordenação por `published_at` decrescente; paginação de 10 itens |
 | CAP-04 PIX | Favorecido, chave, imagem do QR Code, código "Copia e Cola" (se cadastrado) | Sempre o valor vigente |
 
@@ -301,7 +301,7 @@ O sistema inclui um **Painel Administrativo restrito** (`/admin`) em que a equip
 1. O frontend carrega o evento publicado pelo slug, com o formulário dinâmico (`form_schema`).
 2. A pessoa preenche os campos fixos e os personalizados.
 3. A API valida CSRF, limite por IP, honeypot, campos fixos e respostas contra o `form_schema` vigente.
-4. Numa transação com **bloqueio da linha do evento**, a API confere: evento publicado; prazo de inscrição não vencido; evento não iniciado; vagas disponíveis; a mesma pessoa (telefone + nome normalizado) ainda não inscrita no evento (BR-022).
+4. Numa transação com **bloqueio da linha do evento**, a API confere: evento publicado; prazo de inscrição não vencido; evento não iniciado; vagas disponíveis; a mesma pessoa (telefone + nome normalizado) ainda não inscrita no evento (BR-022, só quando o evento pede o nome e o telefone: ADR-025).
 5. A API grava a inscrição e, se houver e-mail, coloca a confirmação na fila (CAP-19).
 6. A API responde sucesso com o resumo da inscrição.
 
@@ -318,11 +318,13 @@ O sistema inclui um **Painel Administrativo restrito** (`/admin`) em que a equip
 
 **Campos fixos**
 
+Nome, telefone e e-mail aparecem conforme as chaves do evento (`asks_participant_name`, `asks_phone`, `asks_email`, todas ligadas por padrão; ADR-025). Campo desligado não aparece, não é validado e, se vier no pedido, é descartado. No formulário, o rótulo do telefone é "Telefone".
+
 | Campo | Tipo | Obrigatório | Regras |
 |---|---|---|---|
-| `participant_name` | Nome de pessoa | Sim | — |
-| `phone` | Telefone | Sim | Único por evento junto com o nome normalizado (BR-022) |
-| `email` | E-mail | Não | Se informado, recebe confirmação |
+| `participant_name` | Nome de pessoa | Se `asks_participant_name` | — |
+| `phone` | Telefone | Se `asks_phone` | Único por evento junto com o nome normalizado (BR-022); sem o nome ou sem o telefone, a duplicidade não é barrada |
+| `email` | E-mail | Não (só aparece se `asks_email`) | Se informado, recebe confirmação |
 | `guardian_name` | Nome de pessoa | Se `has_minors` | Responsável legal |
 | `guardian_phone` | Telefone | Se `has_minors` | — |
 | `guardian_consent` | Booleano | Se `has_minors` | Igual a `true`: "Sou o responsável legal e autorizo a inscrição" |
@@ -462,14 +464,14 @@ O sistema inclui um **Painel Administrativo restrito** (`/admin`) em que a equip
 ### CAP-14 — Gerenciar eventos
 
 - **Ator**: operador.
-- **Permissões**: `eventos.write` (todos os ministérios) ou `eventos.write.own` (só eventos do ministério do operador, RF-D01). **PRD**: US-15.
+- **Permissões**: `eventos.write` (todos os ministérios) ou `eventos.write.own` (só eventos do ministério do operador e os gerais, sem ministério; RF-D01, ADR-025). **PRD**: US-15.
 - **Fluxo principal**: criar em rascunho → montar o formulário de inscrição → publicar → acompanhar inscrições (CAP-15) → despublicar ou encerrar.
 
 | Campo | Tipo | Obrigatório | Regras |
 |---|---|---|---|
 | `title` | Texto | Sim | 3 a 150 caracteres |
 | `slug` | Slug | Sim | Único |
-| `ministry_id` | Referência | Sim | Ministério ativo. Com `.own`, obrigatoriamente o ministério do operador |
+| `ministry_id` | Referência | Não (ADR-025) | Ministério ativo ou vazio (evento geral). Com `.own`, só o ministério do operador ou vazio: levar o evento para outro ministério é recusado (403) |
 | `description` | Texto formatado | Sim | Até 20.000 caracteres após sanitização |
 | `starts_at` | Data/hora | Sim | — |
 | `ends_at` | Data/hora | Não | ≥ `starts_at` |
@@ -478,6 +480,7 @@ O sistema inclui um **Painel Administrativo restrito** (`/admin`) em que a equip
 | `max_spots` | Inteiro | Não | ≥ 1; vazio = ilimitado |
 | `registration_deadline` | Data/hora | Não | ≤ `starts_at` |
 | `has_minors` | Booleano | Sim | Padrão: falso |
+| `asks_participant_name`, `asks_phone`, `asks_email` | Booleano | Não | Padrão: verdadeiro. Se o formulário mostra o nome completo, o telefone e o e-mail (ADR-025) |
 | `is_published` | Booleano | Sim | Padrão: falso (rascunho) |
 | `form_schema` | Lista de campos | Sim | Ver CAP-06; pode ser vazia (só campos fixos) |
 
@@ -488,7 +491,7 @@ O sistema inclui um **Painel Administrativo restrito** (`/admin`) em que a equip
 | Reduzir `max_spots` abaixo do número de inscritos | Rejeita: "Já existem N inscritos; o número de vagas não pode ser menor." |
 | Alterar o `form_schema` com inscrições existentes | Permitido adicionar campos e mudar textos. Remover um campo ou trocar seu `type` exige confirmação explícita; as respostas já gravadas são preservadas com o `label` da época. |
 | Excluir evento com inscrições | Rejeita: "Este evento tem inscrições e não pode ser excluído. Despublique-o." |
-| Operador com `.own` acessa evento de outro ministério | Recusado como "não encontrado" (não revela a existência) |
+| Operador com `.own` acessa evento de outro ministério | Recusado como "não encontrado" (não revela a existência). O evento sem ministério (geral) é acessível (ADR-025) |
 
 ### CAP-15 — Ver e exportar inscritos
 
@@ -1022,13 +1025,13 @@ Severidade: **ERROR** bloqueia a operação. **WARNING** permite a operação e 
 | BR-027 | `max_spots` não pode ficar abaixo do número de inscrições existentes. | `Event` | ERROR | "Já existem N inscritos; o número de vagas não pode ser menor." |
 | BR-028 | Evento com inscrições não pode ser excluído. | `Event` | ERROR | "Este evento tem inscrições e não pode ser excluído. Despublique-o." |
 | BR-029 | Remover campo ou trocar o `type` de um campo com inscrições existentes exige confirmação explícita (`confirm_schema_change = true`). | `Event` | WARNING (bloqueia sem a confirmação) | "Este campo já tem respostas. As respostas existentes serão mantidas com o rótulo atual. Confirmar?" |
-| BR-030 | Com permissão `.own`, o usuário só vê e altera eventos e inscrições do próprio ministério. Os demais aparecem como inexistentes. | `Event`, `EventRegistration` | ERROR (404) | "Evento não encontrado." |
+| BR-030 | Com permissão `.own`, o usuário só vê e altera eventos e inscrições do próprio ministério e dos eventos gerais, sem ministério (ADR-025). Os demais aparecem como inexistentes. | `Event`, `EventRegistration` | ERROR (404) | "Evento não encontrado." |
 | BR-031 | `form_schema`: até 30 campos; `key` única no padrão `^[a-z][a-z0-9_]{0,39}$`; `SELECT`/`MULTISELECT` com 2 a 30 opções sem repetição; `sensitive` opcional, booleano, padrão `false` (BR-083). | `Event` | ERROR | "O formulário pode ter no máximo 30 campos." / "Já existe um campo com a chave X." / "Informe de 2 a 30 opções diferentes." |
 | BR-032 | Slug único por entidade (eventos; mensagens não excluídas). | `Event`, `PalavraVivaPost` | ERROR | "Já existe um item com este endereço. Escolha outro." |
 | BR-033 | Publicar um evento com inscrições exige `registration_deadline` vazio ou futuro **ou** confirmação. | `Event` | WARNING | "O prazo de inscrição já passou; o evento será publicado com inscrições encerradas." |
 | BR-034 | Cancelar uma inscrição pelo painel exclui o registro definitivamente e libera a vaga. Exige `eventos.write` (ou `.own` no próprio ministério). | `EventRegistration` | WARNING (confirmação) | "A inscrição de {nome} será excluída definitivamente e a vaga liberada. Confirmar?" |
 | BR-040 | Edição de boletim única entre os não excluídos. | `Bulletin` | ERROR | "Já existe um boletim com a edição N." |
-| BR-041 | PDF com MIME real `application/pdf`, assinatura `%PDF-` e até 10 MB. | `Bulletin` | ERROR | "O arquivo precisa ser um PDF." / "O PDF pode ter no máximo 10 MB." |
+| BR-041 | PDF com MIME real `application/pdf`, assinatura `%PDF-`, sem `<?php` seguido de espaço, e até 10 MB. `<?=` não é procurado: surge por acaso no conteúdo comprimido de um PDF verdadeiro. | `Bulletin` | ERROR | "O arquivo precisa ser um PDF." / "O PDF pode ter no máximo 10 MB." |
 | BR-042 | Conteúdo agendado (`published_at` futuro) não aparece na API pública nem nos snapshots. | `Bulletin`, `PalavraVivaPost` | — (invariante) | — |
 | BR-044 | `youtube_url` precisa ser do YouTube. | `PalavraVivaPost` | ERROR | "Informe um link do YouTube." |
 | BR-045 | Imagens (banner, QR) com MIME real permitido e tamanho máximo (banner: JPEG/PNG/WebP até 3 MB; QR: PNG/JPEG até 1 MB). | `Event`, `SiteSetting(pix)` | ERROR | "A imagem precisa ser JPEG, PNG ou WebP, com até 3 MB." / "O QR Code precisa ser PNG ou JPEG, com até 1 MB." |
@@ -1054,6 +1057,7 @@ Severidade: **ERROR** bloqueia a operação. **WARNING** permite a operação e 
 | BR-081 | Exclusão a pedido do titular: definitiva, feita no painel por quem tem a permissão de gestão do tipo (contatos) ou `eventos.write`/`.own` (inscrições). A auditoria registra a ação sem dados pessoais. | `Lead`, `EventRegistration` | WARNING (confirmação) | "Esta exclusão é definitiva e não pode ser desfeita. Confirmar?" |
 | BR-082 | `consent_version` gravada é sempre a versão vigente da Política de Privacidade (`PRIVACY_POLICY_VERSION`). | `Consent` | — (invariante) | — |
 | BR-083 | Se o `form_schema` do evento tiver algum campo `sensitive = true`, a inscrição exige `health_consent = true` e grava `health_consent_at` com `consent_version` vigente. Sem campo sensível, `health_consent` é ignorado e `health_consent_at` fica `NULL`. O consentimento é avaliado contra o schema vigente na hora da inscrição (ADR-020). | `EventRegistration` | ERROR | "Para continuar, autorize o uso das informações de saúde." |
+| BR-084 | Cada boletim tem um PDF ou um link externo, nunca os dois e nunca nenhum. O link precisa ser `https`, com um domínio de verdade (sem `localhost` nem IP) e sem usuário ou senha (ADR-026). | `Bulletin` | ERROR | "Informe um link completo, que comece com https://." / "Envie o PDF ou informe o link do boletim." / "Envie só o PDF ou só o link do boletim." |
 
 # Current State & Migration Strategy
 
@@ -1985,6 +1989,30 @@ O site público é pré-renderizado e tem o JS inicial limitado a 160 KB gzip po
 
 **Decisão**: sem o repositório no GitHub (ou no GitHub Free privado, que não tem *environments*), a release é montada na máquina do responsável por `deploy/empacotar-local.sh`, com os mesmos passos e conferências do job de build do `deploy.yml`, e enviada à `inbox/` pelo Gerenciador de Arquivos do cPanel. O ativador e o restante da ADR-010 não mudam. Os testes do CI rodam à mão antes do empacotamento.
 
+### ADR-025 — Ministério responsável opcional e campos fixos da inscrição ligados por evento
+
+- **Status:** Aceita
+- **Data:** 2026-10-29
+- Texto completo em `docs/adr/0025-ministerio-opcional-e-campos-fixos-por-evento.md`.
+
+**Decisão**: `events.ministry_id` aceita `NULL`: o evento sem ministério é um evento geral, que quem tem `.own` também vê e gerencia (eventos e inscrições). Com `.own`, o líder cria evento geral, deixa geral o do próprio ministério e traz um geral para o próprio, mas nunca leva um evento para outro ministério. Três chaves por evento (`asks_participant_name`, `asks_phone`, `asks_email`, padrão ligadas) dizem se o formulário mostra nome, telefone e e-mail; campo desligado é descartado no servidor, nome e telefone das inscrições passam a aceitar `NULL`, a BR-022 só vale com os dois e, sem e-mail, não há confirmação. No formulário de inscrição, "WhatsApp" vira "Telefone".
+
+### ADR-026 — Boletim publicado por PDF ou por link externo
+
+- **Status:** Aceita
+- **Data:** 2026-11-01
+- Texto completo em `docs/adr/0026-boletim-por-link-externo.md`.
+
+**Decisão**: cada boletim tem um PDF ou um link externo `https` (BR-084), de qualquer serviço, como um flipbook do Heyzine. O servidor nunca acessa o link e o site nunca o embute: ele só vira o destino de "Ler boletim", em nova aba, e "Baixar PDF" não aparece. Nova coluna `bulletins.external_url`; `pdf_path` e `pdf_size_bytes` passam a aceitar `NULL` (migration *expand*). *Trade-off aceito*: o conteúdo fica fora do nosso controle e do nosso backup, e um link quebrado não é detectado.
+
+### ADR-027 — Quem lê inscritos também vê o evento e a lista de eventos no painel
+
+- **Status:** Aceita
+- **Data:** 2026-11-05
+- Texto completo em `docs/adr/0027-leitura-do-evento-por-quem-le-inscritos.md`.
+
+**Decisão**: `GET /api/admin/events/{id}` passa a aceitar também `eventos.inscricoes.read[.own]` (`EventPolicy::view`), no mesmo escopo da leitura de inscritos (`.own`: próprio ministério e eventos gerais; fora dele, 404). No painel, "Eventos" e `/admin/eventos` abrem para quem lê inscritos, em modo de consulta (sem "Novo evento" nem "Editar"; o nome leva aos inscritos). Criar, alterar, excluir e cancelar inscrição continuam só com escrita, e os botões de editar e cancelar são decididos por evento. Corrige a tela de inscritos da Secretaria, que recebia 403 ao carregar o evento.
+
 # Technology Stack
 
 > **Regra de versões**: a tabela traz a **linha de versão** escolhida. A versão exata (patch) é fixada no início da implementação (tarefa F0-01) com a última estável disponível, e passa a ser a fonte de verdade em `composer.lock` e `package-lock.json`, ambos versionados. `engines` (package.json) e `config.platform.php` (composer.json) travam os runtimes. A compatibilidade com a hospedagem segue a página da HostGator (Links úteis).
@@ -2186,8 +2214,9 @@ SELECT :user_id, role_code, permission_key FROM role_templates WHERE role_code =
 | `reference_date` | DATE | Não | — | — |
 | `title` | VARCHAR(150) | Não | — | — |
 | `summary_text` | TEXT | Sim | NULL | Texto puro (até 5.000) |
-| `pdf_path` | VARCHAR(255) | Não | — | Caminho relativo, ex.: `boletins/2026/3f9c…e1.pdf` |
-| `pdf_size_bytes` | INT UNSIGNED | Não | — | — |
+| `pdf_path` | VARCHAR(255) | Sim | NULL | Caminho relativo, ex.: `boletins/2026/3f9c…e1.pdf`. NULL quando o boletim é por link (ADR-026) |
+| `pdf_size_bytes` | INT UNSIGNED | Sim | NULL | NULL quando o boletim é por link (ADR-026) |
+| `external_url` | VARCHAR(500) | Sim | NULL | Link externo `https` (BR-084). `ck_bulletins_pdf_or_link`: PDF ou link, nunca os dois e nunca nenhum (vale a partir do MySQL 8.0.16; no 5.7, só a aplicação garante) |
 | `published_at` | DATETIME | Não | — | UTC |
 | `created_by`, `updated_by` | BIGINT UNSIGNED | Sim | NULL | FK → `users.id` |
 | `created_at`, `updated_at`, `deleted_at` | DATETIME | Sim | NULL | — |
@@ -2282,7 +2311,7 @@ SELECT :user_id, role_code, permission_key FROM role_templates WHERE role_code =
 | `id` | BIGINT UNSIGNED | Não | AI | PK |
 | `title` | VARCHAR(150) | Não | — | — |
 | `slug` | VARCHAR(160) | Não | — | `uq_events_slug` |
-| `ministry_id` | BIGINT UNSIGNED | Não | — | FK `fk_events_ministry → ministries_groups.id ON DELETE RESTRICT` |
+| `ministry_id` | BIGINT UNSIGNED | Sim | NULL | FK `fk_events_ministry → ministries_groups.id ON DELETE RESTRICT`. NULL = sem ministério responsável (ADR-025) |
 | `description` | MEDIUMTEXT | Não | — | HTML sanitizado (até 20.000) |
 | `excerpt` | VARCHAR(300) | Não | — | Texto puro, para Open Graph e listagens |
 | `starts_at` | DATETIME | Não | — | UTC |
@@ -2292,6 +2321,7 @@ SELECT :user_id, role_code, permission_key FROM role_templates WHERE role_code =
 | `max_spots` | INT UNSIGNED | Sim | NULL | NULL = ilimitado |
 | `registration_deadline` | DATETIME | Sim | NULL | — |
 | `has_minors` | TINYINT(1) | Não | 0 | — |
+| `asks_participant_name`, `asks_phone`, `asks_email` | TINYINT(1) | Não | 1 | Se o formulário de inscrição mostra cada campo fixo (ADR-025) |
 | `is_published` | TINYINT(1) | Não | 0 | — |
 | `form_schema` | JSON | Não | — | `[]` quando não há campos (a aplicação grava o valor) |
 | `created_by`, `updated_by` | BIGINT UNSIGNED | Sim | NULL | FK → `users.id` |
@@ -2305,9 +2335,9 @@ SELECT :user_id, role_code, permission_key FROM role_templates WHERE role_code =
 |---|---|---|---|---|
 | `id` | BIGINT UNSIGNED | Não | AI | PK |
 | `event_id` | BIGINT UNSIGNED | Não | — | FK `fk_event_registrations_event → events.id ON DELETE RESTRICT` |
-| `participant_name` | VARCHAR(120) | Não | — | — |
-| `participant_name_normalized` | VARCHAR(120) | Não | — | Minúsculas, sem acentos, espaços colapsados (BR-022) |
-| `phone` | VARCHAR(16) | Não | — | E.164 |
+| `participant_name` | VARCHAR(120) | Sim | NULL | NULL quando o evento não pede o nome (ADR-025) |
+| `participant_name_normalized` | VARCHAR(120) | Sim | NULL | Minúsculas, sem acentos, espaços colapsados (BR-022) |
+| `phone` | VARCHAR(16) | Sim | NULL | E.164. NULL quando o evento não pede o telefone (ADR-025) |
 | `email` | VARCHAR(254) | Sim | NULL | — |
 | `guardian_name` | VARCHAR(120) | Sim | NULL | Se `has_minors` |
 | `guardian_phone` | VARCHAR(16) | Sim | NULL | Se `has_minors` |
@@ -2513,7 +2543,7 @@ erDiagram
 - **422**: `year`/`month` inválidos.
 
 #### `GET /api/public/palavra-viva` e `GET /api/public/palavra-viva/{slug}`
-- **Query (lista)**: `page`. 10 por página, por `published_at` decrescente; a lista traz `excerpt` em vez de `body`.
+- **Query (lista)**: `page`; `q` (busca no título, no resumo e no texto, até 120 caracteres; `%` e `_` valem como texto). 10 por página, por `published_at` decrescente; a lista traz `excerpt` em vez de `body`.
 - **Path**: `slug` no padrão `^[a-z0-9]+(-[a-z0-9]+)*$`.
 - **200 (detalhe)**: `{ "data": { "id", "title", "slug", "body" (HTML sanitizado), "author_display", "youtube_video_id", "published_at" } }`.
 - **404**: inexistente, agendado ou excluído.
@@ -2634,12 +2664,12 @@ erDiagram
 - **200**: lista com os campos públicos + `published_at`, `status`, `updated_at`, `updated_by`.
 
 #### `POST /api/admin/bulletins` (multipart)
-- **Perm**: `boletins.write`. **Campos**: `edition_number`, `reference_date`, `title`, `summary_text?`, `published_at?` (padrão: agora), `pdf` (arquivo).
-- **201**: o boletim. **409**: `DUPLICATE_EDITION`. **413/422**: BR-041.
+- **Perm**: `boletins.write`. **Campos**: `edition_number`, `reference_date`, `title`, `summary_text?`, `published_at?` (padrão: agora) e `pdf` (arquivo) **ou** `external_url` (ADR-026; este também aceita JSON).
+- **201**: o boletim. **409**: `DUPLICATE_EDITION`. **413/422**: BR-041. **422**: BR-084.
 
 #### `PATCH /api/admin/bulletins/{id}` (JSON) · `POST /api/admin/bulletins/{id}/pdf` (multipart) · `DELETE /api/admin/bulletins/{id}`
 - **Perm**: `boletins.write`.
-- PATCH altera os metadados (200). POST `/pdf` substitui o arquivo (200; o arquivo anterior é apagado do disco). DELETE faz a exclusão lógica (204).
+- PATCH altera os metadados (200); com `external_url`, o link toma o lugar do PDF, que é apagado do disco (BR-084). POST `/pdf` substitui o arquivo, ou o link (200; o arquivo anterior é apagado do disco). DELETE faz a exclusão lógica (204).
 - Toda alteração dispara a regeneração dos snapshots (ADR-014).
 
 ### Painel — Palavra Viva
@@ -2652,14 +2682,18 @@ erDiagram
 ### Painel — eventos e inscrições
 
 #### `GET /api/admin/events`
-- **Perm**: `eventos.write` (todos) ou `eventos.write.own` (filtra pelo ministério do usuário, BR-030). Também aceita quem só tem `eventos.inscricoes.read[.own]`, para navegar até os inscritos.
+- **Perm**: `eventos.write` (todos) ou `eventos.write.own` (filtra pelo ministério do usuário e pelos eventos gerais, BR-030, ADR-025). Também aceita quem só tem `eventos.inscricoes.read[.own]`, para navegar até os inscritos.
 - **Query**: `page`, `per_page`, `state` (estado derivado), `ministry_id`, `sort` (`-starts_at` padrão | `starts_at`).
 - **200**: lista com `registrations_count`.
 
-#### `POST /api/admin/events` · `GET | PATCH | DELETE /api/admin/events/{id}`
-- **Perm**: `eventos.write` ou `eventos.write.own` (com `.own`, `ministry_id` precisa ser o do usuário).
+#### `GET /api/admin/events/{id}`
+- **Perm**: `eventos.write` ou `.own`, ou `eventos.inscricoes.read` ou `.own`, para a tela de inscritos (ADR-027). Com `.own`, só os eventos do próprio ministério e os gerais (ADR-025); os de outro ministério dão **404**.
+- **200**: o evento, no mesmo formato do `POST`.
+
+#### `POST /api/admin/events` · `PATCH | DELETE /api/admin/events/{id}`
+- **Perm**: `eventos.write` ou `eventos.write.own` (com `.own`, `ministry_id` precisa ser o do usuário ou `null`, o evento geral: ADR-025).
 - **Body (POST/PATCH)**: campos do CAP-14 em JSON (`form_schema` como array) + `confirm_schema_change` (booleano, para BR-029).
-- **201/200**: o evento. **409**: `SPOTS_BELOW_REGISTRATIONS`, `SCHEMA_CHANGE_NEEDS_CONFIRMATION`, `DUPLICATE_SLUG`, `EVENT_HAS_REGISTRATIONS` (DELETE). **404**: fora do escopo `.own`. **422**: BR-025, BR-026, BR-031.
+- **201/200**: o evento. **409**: `SPOTS_BELOW_REGISTRATIONS`, `SCHEMA_CHANGE_NEEDS_CONFIRMATION`, `DUPLICATE_SLUG`, `EVENT_HAS_REGISTRATIONS` (DELETE). **404**: evento de outro ministério, com `.own`. **403**: com `.own`, criar ou mover o evento para outro ministério. **422**: BR-025, BR-026, BR-031.
 - "Encerrar inscrições" = `PATCH { "registration_deadline": "<agora>" }`.
 
 #### `POST /api/admin/events/{id}/banner` (multipart) · `DELETE /api/admin/events/{id}/banner`
@@ -2745,7 +2779,7 @@ Atualização otimista: **não usada** (simplicidade; todas as mutações aguard
 
 | Path | Página | Guard | Pré-renderizada | Lazy |
 |---|---|---|:-:|:-:|
-| `/` | Início (boas-vindas, horários, campanha, Ceia, destaques, YouTube/WhatsApp) | — | ✓ | — |
+| `/` | Início (boas-vindas, horários, Ficha de Visitante, campanha, Ceia, destaques, YouTube/WhatsApp, Instagram) | — | ✓ | — |
 | `/quem-somos` | História (linha do tempo), crenças e CBB, pastor titular, ex-pastores | — | ✓ | — |
 | `/ministerios` | Catálogo de ministérios + "Falar com este ministério" | — | ✓ | — |
 | `/grupos` | Células de CL (filtro por bairro), Homens, Mulheres, Salt, Mini PIB; lema 1Pe 4:10 | — | ✓ | — |
@@ -2769,7 +2803,8 @@ Atualização otimista: **não usada** (simplicidade; todas as mutações aguard
 | `/admin/oracao` · `/admin/oracao/:id` | Pedidos de oração | `leads.oracao.read` | — | ✓ |
 | `/admin/boletins` (+ `/novo`, `/:id`) | Boletins | `boletins.write` | — | ✓ |
 | `/admin/palavra-viva` (+ `/novo`, `/:id`) | Mensagens | `mensagens.write` | — | ✓ |
-| `/admin/eventos` (+ `/novo`, `/:id`) | Eventos e formulário de inscrição | `eventos.write` ou `.own` | — | ✓ |
+| `/admin/eventos` | Lista de eventos (só consulta para quem só lê inscritos, ADR-027) | `eventos.write` ou `.own`, ou `eventos.inscricoes.read` ou `.own` | — | ✓ |
+| `/admin/eventos/novo` · `/admin/eventos/:id` | Evento e formulário de inscrição | `eventos.write` ou `.own` | — | ✓ |
 | `/admin/eventos/:id/inscritos` | Inscritos, CSV e PDF | `eventos.inscricoes.read` ou `.own` | — | ✓ |
 | `/admin/ministerios` (+ `/novo`, `/:id`) | Ministérios, grupos, células | `ministerios.write` | — | ✓ |
 | `/admin/configuracoes` | Horários, avisos, endereço, links, destinatários | `settings.write` | — | ✓ |
@@ -3036,7 +3071,7 @@ A troca da identidade visual mexe só nas variáveis de `app/app.css` (ADR-018).
 | Item | Regra |
 |---|---|
 | Destino | `public_html/uploads/{boletins,eventos,pix}/AAAA/<32 hex>.<ext>` |
-| Validação | `finfo` (MIME real) + assinatura (`%PDF-`, cabeçalhos de imagem) + tamanho (BR-041, BR-045) |
+| Validação | `finfo` (MIME real) + assinatura (`%PDF-`, cabeçalhos de imagem) + tamanho (BR-041, BR-045). O PDF não é reencodado: é recusado se trouxer `<?php` seguido de espaço, e quem impede a execução é o `uploads/.htaccess` |
 | Imagens | Reencodadas e redimensionadas pelo GD (banner: WebP 1600 px e 800 px; QR: PNG mantido, até 1000 px); metadados removidos |
 | `uploads/.htaccess` | `Options -Indexes -ExecCGI`; `RemoveHandler .php .phtml .phar`; `<FilesMatch "\.(php\d?|phtml|phar|pl|py|cgi|sh)$"> Require all denied`; `Header set X-Content-Type-Options nosniff` |
 | Limites PHP | `upload_max_filesize` e `post_max_size` ≥ 12 MB, configurados no MultiPHP INI do cPanel. Valores reais: TBD-02 |

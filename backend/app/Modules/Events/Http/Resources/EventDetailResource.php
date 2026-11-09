@@ -25,6 +25,10 @@ class EventDetailResource extends EventSummaryResource
             'description' => $this->description,
             'banner_url' => $this->bannerUrl(),
             'has_minors' => $this->has_minors,
+            // Os campos fixos que o formulário pede (ADR-025): o que estiver desligado não aparece na inscrição
+            'asks_participant_name' => $this->asks_participant_name,
+            'asks_phone' => $this->asks_phone,
+            'asks_email' => $this->asks_email,
             'form_schema' => array_values($this->form_schema),
         ];
     }

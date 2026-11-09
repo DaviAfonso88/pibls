@@ -140,6 +140,13 @@
     @apply font-sans;
     /* Evita o iOS aumentar o texto por conta própria ao girar o aparelho */
     -webkit-text-size-adjust: 100%;
+    /* Toque sem o atraso do zoom por duplo toque (a pinça continua valendo) e com o realce na cor da marca */
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: color-mix(in srgb, var(--primary) 15%, transparent);
+  }
+
+  ::selection {
+    background-color: color-mix(in srgb, var(--info-border) 40%, transparent);
   }
 
   /* Corpo 17 px / 1.55, como no design */

@@ -37,20 +37,35 @@ export const photos = {
     name: "louvor",
     alt: "A congregação em pé, cantando durante o culto.",
   },
-  /** Quem somos. */
-  youth: {
-    name: "adoracao-jovens",
-    alt: "Jovens de olhos fechados e mãos abertas, em adoração durante o culto.",
+  /** Ministérios, na abertura. */
+  ministries: {
+    name: "ministerios",
+    alt: "Dois homens em pé junto ao púlpito, um deles de microfone na mão, e três pessoas à frente, de olhos fechados e cabeça baixa, em oração.",
   },
-  /** Sou visitante. */
+  /** Quem somos, na abertura. */
+  about: {
+    name: "igreja-em-oracao",
+    alt: "Um homem de costas, de paletó e mãos erguidas, ora diante da congregação, que também ora em pé entre os bancos do templo.",
+  },
+  /** Início, na seção da Juventude Salt. */
+  salt: {
+    name: "juventude-salt",
+    alt: "Um grupo de adolescentes e jovens sorrindo e fazendo sinal de positivo diante de um palco iluminado, num encontro de juventude.",
+  },
+  /** Sou visitante e, na Início, o convite para a Ficha de Visitante. */
   visitor: {
     name: "visitante-acolhido",
     alt: "Um homem sorrindo, sentado em um banco do templo, com a congregação ao fundo.",
   },
-  /** Pedido de oração. */
-  prayer: {
+  /** Como chegar, no convite para a primeira visita. */
+  firstVisit: {
     name: "oracao",
     alt: "A congregação em pé, de cabeça baixa, orando durante o culto.",
+  },
+  /** Pedido de oração. */
+  prayer: {
+    name: "adoracao-jovens",
+    alt: "Dois jovens em pé, de rosto erguido, em adoração durante o culto, com a congregação ao fundo.",
   },
   /** Quero ser membro (a Ceia e a membresia andam juntas no Guia Institucional). */
   supper: {

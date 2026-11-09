@@ -14,7 +14,7 @@ export type paths = {
         /** `GET /api/admin/bulletins`: todos os boletins, inclusive os agendados */
         get: operations["admin.bulletins.index"];
         put?: never;
-        /** `POST /api/admin/bulletins`: cadastra com o PDF (BR-040, BR-041) */
+        /** `POST /api/admin/bulletins`: cadastra com o PDF ou com o link externo (BR-040, BR-041, BR-084) */
         post: operations["admin.bulletins.store"];
         delete?: never;
         options?: never;
@@ -37,7 +37,7 @@ export type paths = {
         delete: operations["admin.bulletins.destroy"];
         options?: never;
         head?: never;
-        /** `PATCH /api/admin/bulletins/{id}`: altera os metadados */
+        /** `PATCH /api/admin/bulletins/{id}`: altera os metadados; com `external_url`, o link toma o lugar do PDF (BR-084) */
         patch: operations["admin.bulletins.update"];
         trace?: never;
     };
@@ -50,7 +50,7 @@ export type paths = {
         };
         get?: never;
         put?: never;
-        /** `POST /api/admin/bulletins/{id}/pdf`: troca o PDF; o anterior é apagado do disco */
+        /** `POST /api/admin/bulletins/{id}/pdf`: troca o PDF, ou o link, pelo arquivo novo; o PDF anterior é apagado do disco */
         post: operations["admin.bulletins.pdf"];
         delete?: never;
         options?: never;
@@ -83,7 +83,7 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** `GET /api/admin/events/{id}`: o evento, para editar */
+        /** `GET /api/admin/events/{id}`: o evento, para editar ou para a tela de inscritos (ADR-027) */
         get: operations["admin.events.show"];
         put?: never;
         post?: never;
@@ -746,12 +746,13 @@ export type components = {
         /**
          * RegisterForEventRequest
          * @description `POST /api/public/events/{slug}/register` (contracts/openapi.yaml → RegistrationInput; BR-001, BR-004). Aqui só o
-         *     que não depende do evento: o formato dos campos fixos. Quem exige o responsável, o consentimento de saúde e as
-         *     respostas é a Action, contra o formulário vigente lido sob o bloqueio do evento (BR-023, BR-024, BR-083).
+         *     que não depende do evento: o formato dos campos fixos. Quem exige o nome e o telefone (o evento pode não pedi-los,
+         *     ADR-025), o responsável, o consentimento de saúde e as respostas é a Action, contra o formulário vigente lido sob o
+         *     bloqueio do evento (BR-023, BR-024, BR-083).
          */
         RegisterForEventRequest: {
-            participant_name: string;
-            phone: string;
+            participant_name?: string | null;
+            phone?: string | null;
             email?: string | null;
             guardian_name?: string | null;
             guardian_phone?: string | null;
@@ -781,8 +782,8 @@ export type components = {
         };
         /**
          * StoreBulletinRequest
-         * @description `POST /api/admin/bulletins` (multipart): metadados e o PDF. O tipo e o tamanho do PDF são conferidos pelo
-         *     `UploadStore` (422 para tipo errado, 413 para mais de 10 MB, BR-041), e não aqui.
+         * @description `POST /api/admin/bulletins`: metadados e o PDF (multipart) ou o link externo (BR-084). O tipo e o tamanho do PDF são
+         *     conferidos pelo `UploadStore` (422 para tipo errado, 413 para mais de 10 MB, BR-041), e não aqui.
          */
         StoreBulletinRequest: {
             edition_number: number;
@@ -793,18 +794,20 @@ export type components = {
             /** Format: date-time */
             published_at?: string | null;
             /** Format: binary */
-            pdf: string;
+            pdf?: string;
+            external_url?: string | null;
         };
         /**
          * StoreEventRequest
          * @description `POST /api/admin/events`: o evento inteiro (contracts/openapi.yaml → EventInput). Quem só tem `eventos.write.own` cria
-         *     apenas no próprio ministério (403 nos outros). As datas sem fuso valem em Brasília. A coerência das datas (BR-025,
+         *     apenas no próprio ministério (403 nos outros). O ministério responsável é opcional para todos: sem ele, o evento é geral
+         *     (ADR-025). As datas sem fuso valem em Brasília. A coerência das datas (BR-025,
          *     BR-026) e as regras do formulário (BR-031) vêm depois: as primeiras, da Action; as do formulário, daqui.
          */
         StoreEventRequest: {
             title: string;
             slug: string;
-            ministry_id: number;
+            ministry_id?: number | null;
             description: string;
             /** Format: date-time */
             starts_at: string;
@@ -815,6 +818,9 @@ export type components = {
             /** Format: date-time */
             registration_deadline?: string | null;
             has_minors?: boolean | null;
+            asks_participant_name?: boolean | null;
+            asks_phone?: boolean | null;
+            asks_email?: boolean | null;
             is_published?: boolean | null;
             form_schema?: string[] | null;
         };
@@ -861,7 +867,8 @@ export type components = {
         };
         /**
          * UpdateBulletinRequest
-         * @description `PATCH /api/admin/bulletins/{id}`: só os metadados; todos opcionais. O PDF troca por `POST …/pdf`.
+         * @description `PATCH /api/admin/bulletins/{id}`: os metadados e o link externo; todos opcionais. O PDF troca por `POST …/pdf`.
+         *     Mandar `external_url` faz o boletim passar a usar o link (BR-084); o caminho de volta é enviar um PDF.
          */
         UpdateBulletinRequest: {
             edition_number?: number;
@@ -871,17 +878,19 @@ export type components = {
             summary_text?: string | null;
             /** Format: date-time */
             published_at?: string;
+            external_url?: string;
         };
         /**
          * UpdateEventRequest
          * @description `PATCH /api/admin/events/{id}`: os mesmos campos do cadastro, todos opcionais. Serve também para publicar e despublicar
          *     (`is_published`) e para "Encerrar inscrições" (`registration_deadline` = agora). Evento de outro ministério, para quem só
-         *     tem `.own`, é 404 (BR-030); passar o evento para outro ministério exige poder escrever nos dois.
+         *     tem `.own`, é 404 (BR-030); passar o evento para outro ministério exige poder escrever nos dois. Deixá-lo sem
+         *     ministério (`ministry_id: null`) o torna geral, que qualquer um com permissão de escrita de eventos gerencia (ADR-025).
          */
         UpdateEventRequest: {
             title?: string;
             slug?: string;
-            ministry_id?: number;
+            ministry_id?: number | null;
             description?: string;
             /** Format: date-time */
             starts_at?: string;
@@ -892,6 +901,9 @@ export type components = {
             /** Format: date-time */
             registration_deadline?: string | null;
             has_minors?: boolean;
+            asks_participant_name?: boolean;
+            asks_phone?: boolean;
+            asks_email?: boolean;
             is_published?: boolean;
             form_schema?: string[];
             confirm_schema_change?: boolean | null;
@@ -1679,6 +1691,7 @@ export interface operations {
             query?: {
                 page?: number | null;
                 per_page?: number | null;
+                q?: string | null;
             };
             header?: never;
             path?: never;
@@ -2307,6 +2320,7 @@ export interface operations {
             query?: {
                 page?: number | null;
                 per_page?: number | null;
+                q?: string | null;
             };
             header?: never;
             path?: never;
@@ -2380,7 +2394,7 @@ export interface operations {
                         data: {
                             id: unknown;
                             event_title: string;
-                            participant_name: string;
+                            participant_name: string | null;
                             starts_at: string | null;
                             confirmation_email_queued: boolean;
                         };

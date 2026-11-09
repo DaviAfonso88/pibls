@@ -42,6 +42,9 @@ const EVENT = {
   description: "<p>Três dias.</p>",
   banner_url: null,
   has_minors: true,
+  asks_participant_name: true,
+  asks_phone: true,
+  asks_email: true,
   form_schema: [
     field("camiseta", "Tamanho da camiseta", "SELECT"),
     field("alergias", "Alergias", "TEXT"),
@@ -325,6 +328,29 @@ describe("cancelamento (FR-062, BR-034, BR-081)", () => {
     expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
   });
 
+  it("ADR-025 inscrição sem nome nem telefone (o evento não pede) mostra '—' e se cancela pela data", async () => {
+    mockRegistrations([registration(12, "", { participant_name: null, phone: null })]);
+    const user = userEvent.setup();
+    renderAdmin("/admin/eventos/1/inscritos");
+
+    const table = await screen.findByRole("table", { name: "Lista de inscrições" });
+    const row = within(table).getAllByRole("row")[1] as HTMLElement;
+    expect(within(row).getAllByText("—").length).toBeGreaterThanOrEqual(2);
+
+    await user.click(
+      within(table).getByRole("button", {
+        name: "Cancelar a inscrição feita em 02/11/2026 12h30",
+      }),
+    );
+
+    const dialog = await screen.findByRole("alertdialog", { name: "Cancelar esta inscrição?" });
+    expect(
+      within(dialog).getByText(
+        "A inscrição será excluída definitivamente e a vaga liberada. Confirmar?",
+      ),
+    ).toBeVisible();
+  });
+
   it("'Manter inscrição' fecha sem excluir", async () => {
     mockRegistrations();
     let deleted = false;
@@ -409,6 +435,27 @@ describe("cancelamento (FR-062, BR-034, BR-081)", () => {
     expect(screen.getByRole("button", { name: "Exportar CSV" })).toBeEnabled();
     expect(screen.queryByRole("button", { name: /Cancelar a inscrição/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("columnheader", { name: "Ações" })).not.toBeInTheDocument();
+  });
+
+  it("ADR-027 BR-030 quem lê os inscritos de todos e gerencia só outro ministério vê, mas não cancela", async () => {
+    mockMe(
+      userFixture("SECRETARIA", {
+        roles: ["SECRETARIA", "LIDER_MINISTERIO"],
+        permissions: [
+          "eventos.inscricoes.read",
+          "eventos.inscricoes.read.own",
+          "eventos.write.own",
+          "leads.read",
+        ],
+        // O evento é do ministério 2 (Música)
+        ministry: { id: 3, name: "Juventude" },
+      }),
+    );
+    mockRegistrations();
+    renderAdmin("/admin/eventos/1/inscritos");
+
+    expect(await screen.findByRole("row", { name: /Ana Souza/ })).toBeVisible();
+    expect(screen.queryByRole("button", { name: /Cancelar a inscrição/ })).not.toBeInTheDocument();
   });
 });
 

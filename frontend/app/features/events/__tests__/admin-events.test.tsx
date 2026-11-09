@@ -4,7 +4,13 @@ import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { expectNoA11yViolations } from "../../../../test/axe";
-import { mockAdminDefaults, mockMe, renderAdmin, userFixture } from "../../../../test/admin";
+import {
+  ROLE_PERMISSIONS,
+  mockAdminDefaults,
+  mockMe,
+  renderAdmin,
+  userFixture,
+} from "../../../../test/admin";
 import { resetQueryCache, settingsFixture, useSnapshots } from "../../../../test/fixtures";
 import { server } from "../../../../test/server";
 import { draftKey } from "~/shared/drafts";
@@ -16,6 +22,16 @@ import { draftKey } from "~/shared/drafts";
 
 const COMUNICACAO = userFixture("COMUNICACAO");
 const LIDER = userFixture("LIDER_MINISTERIO", { ministry: { id: 2, name: "Música" } });
+const SECRETARIA = userFixture("SECRETARIA");
+/** Secretaria e líder do ministério 3: lê os inscritos de todos, mas só gerencia os do próprio ministério e os gerais. */
+const SECRETARIA_E_LIDER = userFixture("SECRETARIA", {
+  roles: ["SECRETARIA", "LIDER_MINISTERIO"],
+  permissions: [
+    ...(ROLE_PERMISSIONS.SECRETARIA ?? []),
+    ...(ROLE_PERMISSIONS.LIDER_MINISTERIO ?? []),
+  ],
+  ministry: { id: 3, name: "Juventude" },
+});
 
 beforeEach(() => {
   resetQueryCache();
@@ -65,6 +81,9 @@ function event(id: number, overrides: Record<string, unknown> = {}) {
     description: "<p>Três dias de louvor.</p>",
     banner_url: null,
     has_minors: false,
+    asks_participant_name: true,
+    asks_phone: true,
+    asks_email: true,
     form_schema: [],
     is_published: true,
     max_spots: 60,
@@ -109,7 +128,7 @@ function setDateTime(label: RegExp | string, value: string) {
 
 async function fillBasics(user: ReturnType<typeof userEvent.setup>) {
   await user.type(await screen.findByRole("textbox", { name: "Nome" }), "Retiro de jovens");
-  await user.selectOptions(screen.getByRole("combobox", { name: "Ministério responsável" }), "2");
+  await user.selectOptions(screen.getByRole("combobox", { name: /^Ministério responsável/ }), "2");
   setDateTime("Começa", "2099-12-05T09:00");
   await user.type(screen.getByRole("textbox", { name: "Local" }), "Chácara Boa Vista");
   await screen.findByRole("textbox", { name: "Descrição" });
@@ -137,7 +156,7 @@ describe("flag e permissão", () => {
     ).toBeVisible();
   });
 
-  it("BR-076 quem não tem eventos.write nem .own vê o aviso de falta de acesso", async () => {
+  it("BR-076 quem não gerencia eventos nem lê inscritos vê o aviso de falta de acesso", async () => {
     mockMe(userFixture("TESOURARIA"));
     renderAdmin("/admin/eventos");
 
@@ -251,6 +270,84 @@ describe("lista", () => {
     // O filtro de ministério existe com mais de um ministério na lista; aqui o snapshot tem vários, então fica
     expect(screen.getByRole("combobox", { name: "Situação" })).toBeVisible();
   });
+
+  it("ADR-027 a Secretaria, que só lê inscritos, vê a lista para consulta: sem 'Novo evento' nem 'Editar', e o nome leva aos inscritos", async () => {
+    mockMe(SECRETARIA);
+    server.use(
+      http.get("*/api/admin/events", () => HttpResponse.json({ data: [event(1)], meta: meta(1) })),
+    );
+    const { container } = renderAdmin("/admin/eventos");
+
+    expect(await screen.findByRole("heading", { level: 1, name: "Eventos" })).toBeVisible();
+    expect(screen.getByText("Acompanhe as vagas e os inscritos de cada evento.")).toBeVisible();
+    const table = await screen.findByRole("table", { name: "Eventos" });
+    expect(within(table).getByRole("link", { name: "Evento 1" })).toHaveAttribute(
+      "href",
+      "/admin/eventos/1/inscritos",
+    );
+    expect(
+      within(table).getByRole("link", { name: "Ver os inscritos de Evento 1" }),
+    ).toHaveAttribute("href", "/admin/eventos/1/inscritos");
+    expect(screen.queryByRole("link", { name: /Editar o evento/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Novo evento" })).not.toBeInTheDocument();
+
+    await expectNoA11yViolations(container);
+  });
+
+  it("ADR-027 sem eventos, a Secretaria não recebe a dica de criar o primeiro", async () => {
+    mockMe(SECRETARIA);
+    server.use(
+      http.get("*/api/admin/events", () => HttpResponse.json({ data: [], meta: meta(0) })),
+    );
+    renderAdmin("/admin/eventos");
+
+    expect(await screen.findByText("Nenhum evento por aqui ainda.")).toBeVisible();
+    expect(
+      screen.queryByText("Crie o primeiro evento para abrir inscrições."),
+    ).not.toBeInTheDocument();
+  });
+
+  it("ADR-027 BR-030 quem lê os inscritos de todos e gerencia só o próprio ministério edita só os dele e os gerais", async () => {
+    mockMe(SECRETARIA_E_LIDER);
+    server.use(
+      http.get("*/api/admin/events", () =>
+        HttpResponse.json({
+          data: [
+            event(1),
+            event(2, { ministry: { id: 3, name: "Juventude" } }),
+            event(3, { ministry: null }),
+          ],
+          meta: meta(3),
+        }),
+      ),
+    );
+    renderAdmin("/admin/eventos");
+
+    const table = await screen.findByRole("table", { name: "Eventos" });
+    expect(within(table).getByRole("link", { name: "Evento 1" })).toHaveAttribute(
+      "href",
+      "/admin/eventos/1/inscritos",
+    );
+    expect(within(table).queryByRole("link", { name: "Editar o evento Evento 1" })).toBeNull();
+    expect(within(table).getByRole("link", { name: "Editar o evento Evento 2" })).toHaveAttribute(
+      "href",
+      "/admin/eventos/2",
+    );
+    expect(within(table).getByRole("link", { name: "Editar o evento Evento 3" })).toHaveAttribute(
+      "href",
+      "/admin/eventos/3",
+    );
+    expect(screen.getByRole("link", { name: "Novo evento" })).toBeVisible();
+  });
+
+  it("ADR-027 a edição continua só para quem gerencia: a Secretaria vê o aviso de falta de acesso", async () => {
+    mockMe(SECRETARIA);
+    renderAdmin("/admin/eventos/1");
+
+    expect(
+      await screen.findByRole("heading", { name: "Você não tem acesso a esta área" }),
+    ).toBeVisible();
+  });
 });
 
 describe("cadastro", () => {
@@ -310,6 +407,9 @@ describe("cadastro", () => {
       max_spots: 60,
       registration_deadline: null,
       has_minors: false,
+      asks_participant_name: true,
+      asks_phone: true,
+      asks_email: true,
       form_schema: [],
       is_published: false,
     });
@@ -379,7 +479,7 @@ describe("cadastro", () => {
     ]);
   });
 
-  it("valida no navegador: nome, ministério, início, local, descrição, término e prazo (BR-025, BR-026)", async () => {
+  it("valida no navegador: nome, início, local, descrição, término e prazo (BR-025, BR-026); o ministério é opcional", async () => {
     const user = userEvent.setup();
     renderAdmin("/admin/eventos/novo");
     await screen.findByRole("textbox", { name: "Nome" });
@@ -387,12 +487,17 @@ describe("cadastro", () => {
     await user.click(screen.getByRole("button", { name: "Salvar rascunho" }));
 
     expect(await screen.findByText("O nome precisa ter de 3 a 150 caracteres.")).toBeVisible();
-    expect(screen.getByText("Escolha o ministério.")).toBeVisible();
+    expect(screen.getByRole("combobox", { name: /^Ministério responsável/ })).not.toHaveAttribute(
+      "aria-invalid",
+    );
     expect(screen.getByText("Informe quando o evento começa.")).toBeVisible();
     expect(screen.getByText("Informe o local do evento.")).toBeVisible();
 
     await user.type(screen.getByRole("textbox", { name: "Nome" }), "Retiro");
-    await user.selectOptions(screen.getByRole("combobox", { name: "Ministério responsável" }), "2");
+    await user.selectOptions(
+      screen.getByRole("combobox", { name: /^Ministério responsável/ }),
+      "2",
+    );
     setDateTime("Começa", "2099-12-05T09:00");
     setDateTime(/^Termina/, "2099-12-05T08:00");
     setDateTime(/Inscrições até/, "2099-12-06T08:00");
@@ -599,27 +704,27 @@ describe("cadastro", () => {
     await waitFor(() => expect(router.state.location.pathname).toBe("/admin/eventos/9"));
   });
 
-  it("BR-030 o líder tem o ministério fixo no dele", async () => {
+  it("BR-030 ADR-025 o líder escolhe só entre o ministério dele (já marcado) e nenhum, o evento geral", async () => {
     mockMe(LIDER);
-    let sent: { ministry_id?: number } | null = null;
+    let sent: { ministry_id?: number | null } | null = null;
     server.use(
       http.post("*/api/admin/events", async ({ request }) => {
-        sent = (await request.json()) as { ministry_id?: number };
+        sent = (await request.json()) as { ministry_id?: number | null };
         return HttpResponse.json({ data: event(9) }, { status: 201 });
       }),
       http.get("*/api/admin/events/9", () => HttpResponse.json({ data: event(9) })),
     );
     const user = userEvent.setup();
     renderAdmin("/admin/eventos/novo");
-    const ministry = await screen.findByRole("combobox", { name: "Ministério responsável" });
+    const ministry = await screen.findByRole("combobox", { name: /^Ministério responsável/ });
 
-    expect(ministry).toBeDisabled();
+    expect(ministry).toBeEnabled();
     expect(ministry).toHaveValue("2");
     expect(
       within(ministry)
         .getAllByRole("option")
         .map((option) => option.textContent),
-    ).toEqual(["Escolha…", "Música"]);
+    ).toEqual(["Sem ministério responsável", "Música"]);
 
     await user.type(screen.getByRole("textbox", { name: "Nome" }), "Ensaio aberto");
     setDateTime("Começa", "2099-12-05T09:00");
@@ -632,6 +737,106 @@ describe("cadastro", () => {
     await user.click(screen.getByRole("button", { name: "Salvar rascunho" }));
 
     await waitFor(() => expect(sent).toMatchObject({ ministry_id: 2 }));
+  });
+
+  it("ADR-025 o líder edita um evento geral, que continua sem ministério", async () => {
+    mockMe(LIDER);
+    let sent: Record<string, unknown> | null = null;
+    server.use(
+      http.get("*/api/admin/events/1", () =>
+        HttpResponse.json({ data: event(1, { ministry: null }) }),
+      ),
+      http.patch("*/api/admin/events/1", async ({ request }) => {
+        sent = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({ data: event(1, { ministry: null, title: "Culto geral" }) });
+      }),
+    );
+    const user = userEvent.setup();
+    renderAdmin("/admin/eventos/1");
+
+    expect(await screen.findByRole("heading", { level: 1, name: "Evento 1" })).toBeVisible();
+    expect(screen.getByRole("combobox", { name: /^Ministério responsável/ })).toHaveValue("");
+
+    const name = screen.getByRole("textbox", { name: "Nome" });
+    await user.clear(name);
+    await user.type(name, "Culto geral");
+    await user.click(screen.getByRole("button", { name: "Salvar alterações" }));
+
+    await waitFor(() => expect(sent).toMatchObject({ title: "Culto geral", ministry_id: null }));
+  });
+
+  it("ADR-025 quem gerencia todos os eventos pode deixar o evento sem ministério", async () => {
+    let sent: Record<string, unknown> | null = null;
+    server.use(
+      http.post("*/api/admin/events", async ({ request }) => {
+        sent = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({ data: event(9, { ministry: null }) }, { status: 201 });
+      }),
+      http.get("*/api/admin/events/9", () =>
+        HttpResponse.json({ data: event(9, { ministry: null }) }),
+      ),
+    );
+    const user = userEvent.setup();
+    renderAdmin("/admin/eventos/novo");
+    await fillBasics(user);
+
+    const ministry = screen.getByRole("combobox", {
+      name: /^Ministério responsável\s*\(opcional\)$/,
+    });
+    expect(ministry).toHaveAccessibleDescription(
+      "Sem ministério, o evento é geral: todos que gerenciam eventos, inclusive os líderes de ministério, veem e editam.",
+    );
+    await user.selectOptions(ministry, "");
+    expect(within(ministry).getAllByRole("option")[0]).toHaveTextContent(
+      "Sem ministério responsável",
+    );
+    await user.click(screen.getByRole("button", { name: "Salvar rascunho" }));
+
+    await waitFor(() => expect(sent).toMatchObject({ ministry_id: null }));
+  });
+
+  it("ADR-025 liga e desliga o nome, o telefone e o e-mail do formulário de inscrição", async () => {
+    let sent: Record<string, unknown> | null = null;
+    server.use(
+      http.post("*/api/admin/events", async ({ request }) => {
+        sent = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({ data: event(9) }, { status: 201 });
+      }),
+      http.get("*/api/admin/events/9", () => HttpResponse.json({ data: event(9) })),
+    );
+    const user = userEvent.setup();
+    const { container } = renderAdmin("/admin/eventos/novo");
+    await fillBasics(user);
+
+    const fixed = screen.getByRole("group", { name: "Campos padrão do formulário" });
+    const name = within(fixed).getByRole("switch", { name: /Nome completo/ });
+    const phone = within(fixed).getByRole("switch", { name: /Telefone/ });
+    const email = within(fixed).getByRole("switch", { name: /E-mail/ });
+    expect([name, phone, email].map((toggle) => (toggle as HTMLInputElement).checked)).toEqual([
+      true,
+      true,
+      true,
+    ]);
+    expect(phone).toHaveAccessibleDescription("Aparece · obrigatório");
+    expect(screen.queryByText(/não consegue barrar a inscrição repetida/)).toBeNull();
+
+    await user.click(phone);
+    await user.click(email);
+
+    expect(phone).toHaveAccessibleDescription("Não aparece");
+    expect(email).toHaveAccessibleDescription("Não aparece · sem e-mail de confirmação");
+    expect(screen.getByText(/não consegue barrar a inscrição repetida/)).toBeVisible();
+    await expectNoA11yViolations(container);
+
+    await user.click(screen.getByRole("button", { name: "Salvar rascunho" }));
+
+    await waitFor(() =>
+      expect(sent).toMatchObject({
+        asks_participant_name: true,
+        asks_phone: false,
+        asks_email: false,
+      }),
+    );
   });
 });
 

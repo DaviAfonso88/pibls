@@ -9,6 +9,7 @@ use App\Modules\Platform\DomainEvents\PublicContentChanged;
 use App\Modules\Platform\Models\AuditLog;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event as EventBus;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Testing\TestResponse;
@@ -199,9 +200,10 @@ it('o resumo tem no máximo 300 caracteres', function () {
 it('valida os campos obrigatórios e os formatos', function () {
     asStaff('COMUNICACAO');
 
+    // O ministério é opcional para quem escreve em todos (ADR-025)
     postJson('/api/admin/events', [])
         ->assertUnprocessable()
-        ->assertFieldErrors(['title', 'slug', 'ministry_id', 'description', 'starts_at', 'location']);
+        ->assertFieldErrors(['title', 'slug', 'description', 'starts_at', 'location']);
 
     postJson('/api/admin/events', adminEventFields(['slug' => 'Retiro De Jovens', 'ministry_id' => 999_999, 'max_spots' => 0, 'title' => str_repeat('a', 151)]))
         ->assertUnprocessable()
@@ -215,6 +217,43 @@ it('o evento só pode ser de um ministério ativo', function () {
     postJson('/api/admin/events', adminEventFields(['ministry_id' => $inactive->getKey()]))
         ->assertUnprocessable()
         ->assertFieldErrors(['ministry_id']);
+});
+
+it('ADR-025 cadastra e deixa um evento sem ministério responsável', function () {
+    asStaff('COMUNICACAO');
+
+    $id = postJson('/api/admin/events', adminEventFields(['ministry_id' => null]))
+        ->assertCreated()
+        ->assertJsonPath('data.ministry', null)
+        ->json('data.id');
+
+    $ministry = MinistryGroup::factory()->create();
+    patchJson("/api/admin/events/{$id}", ['ministry_id' => $ministry->getKey()])->assertOk()->assertJsonPath('data.ministry.id', $ministry->getKey());
+    patchJson("/api/admin/events/{$id}", ['ministry_id' => null])->assertOk()->assertJsonPath('data.ministry', null);
+
+    expect(Event::query()->findOrFail($id)->ministry_id)->toBeNull();
+});
+
+it('ADR-025 guarda se o formulário pede o nome, o telefone e o e-mail; sem nada no pedido, pede os três', function () {
+    asStaff('COMUNICACAO');
+
+    postJson('/api/admin/events', adminEventFields())->assertCreated()
+        ->assertJsonPath('data.asks_participant_name', true)
+        ->assertJsonPath('data.asks_phone', true)
+        ->assertJsonPath('data.asks_email', true);
+
+    $id = postJson('/api/admin/events', adminEventFields(['slug' => 'outro', 'asks_phone' => false, 'asks_email' => false]))
+        ->assertCreated()
+        ->assertJsonPath('data.asks_participant_name', true)
+        ->assertJsonPath('data.asks_phone', false)
+        ->assertJsonPath('data.asks_email', false)
+        ->json('data.id');
+
+    patchJson("/api/admin/events/{$id}", ['asks_participant_name' => false, 'asks_phone' => true])->assertOk()
+        ->assertJsonPath('data.asks_participant_name', false)
+        ->assertJsonPath('data.asks_phone', true)
+        ->assertJsonPath('data.asks_email', false);
+    patchJson("/api/admin/events/{$id}", ['asks_email' => 'talvez'])->assertUnprocessable()->assertFieldErrors(['asks_email']);
 });
 
 it('mostra um evento para editar', function () {
@@ -681,6 +720,47 @@ it('BR-030 o líder não cria evento para outro ministério, nem muda o evento p
     expect($mine->fresh()->ministry_id)->toBe($leader->ministry_id)->and(Event::query()->count())->toBe(1);
 });
 
+it('ADR-025 o líder (.own) cria um evento geral, sem ministério', function () {
+    asStaff('LIDER_MINISTERIO');
+
+    postJson('/api/admin/events', adminEventFields(['ministry_id' => null]))
+        ->assertCreated()
+        ->assertJsonPath('data.ministry', null);
+
+    expect(Event::query()->sole()->ministry_id)->toBeNull();
+});
+
+it('ADR-025 BR-030 o líder (.own) vê e gerencia os eventos gerais, e os de outro ministério continuam inexistentes', function () {
+    $leader = asStaff('LIDER_MINISTERIO');
+    $general = adminEvent(['ministry_id' => null, 'title' => 'Culto geral', 'starts_at' => now()->addDays(20)]);
+    $mine = adminEvent(['ministry_id' => $leader->ministry_id, 'slug' => 'meu', 'starts_at' => now()->addDays(10)]);
+    $other = adminEvent(['ministry_id' => MinistryGroup::factory()->create()->getKey(), 'slug' => 'outro']);
+    $url = "/api/admin/events/{$general->getKey()}";
+
+    expect(array_column(getJson('/api/admin/events')->assertOk()->json('data'), 'id'))->toBe([$general->getKey(), $mine->getKey()]);
+    getJson($url)->assertOk()->assertJsonPath('data.ministry', null);
+    patchJson($url, ['title' => 'Culto geral de Natal', 'is_published' => true])->assertOk()->assertJsonPath('data.title', 'Culto geral de Natal');
+    getJson("/api/admin/events/{$other->getKey()}")->assertNotFound();
+    deleteJson($url)->assertNoContent();
+
+    expect(Event::query()->find($general->getKey()))->toBeNull();
+});
+
+it('ADR-025 o líder (.own) torna geral o próprio evento e traz um geral para o seu ministério, nunca para outro', function () {
+    $leader = asStaff('LIDER_MINISTERIO');
+    $mine = adminEvent(['ministry_id' => $leader->ministry_id]);
+    $general = adminEvent(['ministry_id' => null, 'slug' => 'geral']);
+    $other = MinistryGroup::factory()->create();
+
+    patchJson("/api/admin/events/{$mine->getKey()}", ['ministry_id' => null])->assertOk()->assertJsonPath('data.ministry', null);
+    patchJson("/api/admin/events/{$general->getKey()}", ['ministry_id' => $leader->ministry_id])->assertOk()
+        ->assertJsonPath('data.ministry.id', $leader->ministry_id);
+    patchJson("/api/admin/events/{$mine->getKey()}", ['ministry_id' => $other->getKey()])->assertForbidden();
+
+    expect($mine->fresh()->ministry_id)->toBeNull()
+        ->and($general->fresh()->ministry_id)->toBe($leader->ministry_id);
+});
+
 it('a Comunicação (todos) cria e muda o ministério de qualquer evento', function () {
     asStaff('COMUNICACAO');
     $event = adminEvent();
@@ -694,11 +774,16 @@ it('a Comunicação (todos) cria e muda o ministério de qualquer evento', funct
 it('BR-075 líder sem ministério vinculado não recebe acesso nenhum', function () {
     asStaff('LIDER_MINISTERIO', ['ministry_id' => null]);
     $event = adminEvent();
+    // Nem os gerais (ADR-025): o evento sem ministério não vira porta para quem não tem ministério vinculado
+    $general = adminEvent(['ministry_id' => null, 'slug' => 'geral']);
 
     getJson('/api/admin/events')->assertForbidden();
     postJson('/api/admin/events', adminEventFields())->assertForbidden();
+    postJson('/api/admin/events', adminEventFields(['ministry_id' => null, 'slug' => 'novo-geral']))->assertForbidden();
     getJson("/api/admin/events/{$event->getKey()}")->assertForbidden();
+    getJson("/api/admin/events/{$general->getKey()}")->assertForbidden();
     patchJson("/api/admin/events/{$event->getKey()}", ['title' => 'X'])->assertForbidden();
+    patchJson("/api/admin/events/{$general->getKey()}", ['title' => 'X'])->assertForbidden();
     deleteJson("/api/admin/events/{$event->getKey()}")->assertForbidden();
 });
 
@@ -713,17 +798,44 @@ it('quem não tem permissão de eventos recebe 403', function (string $role) {
     deleteJson("/api/admin/events/{$event->getKey()}")->assertForbidden();
 })->with(['TESOURARIA', 'ORACAO', 'PASTORAL', 'ADMIN_TECNICO']);
 
-it('a Secretaria, que só lê inscritos, vê a lista de todos os eventos mas não escreve', function () {
+it('ADR-027 a Secretaria, que só lê inscritos, vê a lista e cada evento de qualquer ministério, mas não escreve', function () {
     asStaff('SECRETARIA');
-    $event = adminEvent();
+    $event = adminEvent(['title' => 'Retiro', 'form_schema' => adminEventSchema()]);
+    $general = adminEvent(['ministry_id' => null, 'slug' => 'geral']);
 
-    getJson('/api/admin/events')->assertOk()->assertJsonPath('meta.total', 1);
+    getJson('/api/admin/events')->assertOk()->assertJsonPath('meta.total', 2);
+    // A tela de inscritos monta as colunas, o CSV e o PDF a partir do evento
+    getJson("/api/admin/events/{$event->getKey()}")
+        ->assertOk()
+        ->assertJsonPath('data.title', 'Retiro')
+        ->assertJsonPath('data.form_schema.0.key', 'camiseta');
+    getJson("/api/admin/events/{$general->getKey()}")->assertOk();
 
     postJson('/api/admin/events', adminEventFields())->assertForbidden();
-    getJson("/api/admin/events/{$event->getKey()}")->assertForbidden();
     patchJson("/api/admin/events/{$event->getKey()}", ['title' => 'X'])->assertForbidden();
     deleteJson("/api/admin/events/{$event->getKey()}")->assertForbidden();
     postAdminEventBanner($event)->assertForbidden();
+
+    expect($event->fresh()->title)->toBe('Retiro');
+});
+
+it('ADR-027 BR-030 quem só lê os inscritos do próprio ministério vê o evento dele e os gerais; o de outro não existe', function () {
+    // Nenhum papel de referência tem `.read.own` sem `.write.own`; a combinação vem de linhas avulsas de `user_permissions`
+    $reader = asStaff('LIDER_MINISTERIO');
+    DB::table('user_permissions')
+        ->where('user_id', $reader->getKey())
+        ->where('permission_key', 'eventos.write.own')
+        ->delete();
+    $mine = adminEvent(['ministry_id' => $reader->ministry_id]);
+    $general = adminEvent(['ministry_id' => null, 'slug' => 'geral']);
+    $other = adminEvent(['slug' => 'outro']);
+
+    getJson("/api/admin/events/{$mine->getKey()}")->assertOk();
+    getJson("/api/admin/events/{$general->getKey()}")->assertOk();
+    getJson("/api/admin/events/{$other->getKey()}")->assertNotFound()->assertJsonPath('error.code', 'NOT_FOUND');
+
+    patchJson("/api/admin/events/{$mine->getKey()}", ['title' => 'X'])->assertForbidden();
+    deleteJson("/api/admin/events/{$mine->getKey()}")->assertForbidden();
 });
 
 it('sem sessão, 401', function () {

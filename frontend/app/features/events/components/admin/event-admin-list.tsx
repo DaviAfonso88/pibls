@@ -17,6 +17,7 @@ import {
   type EventState,
 } from "../../admin-api";
 import { eventAdminMessages } from "../../admin-messages";
+import { canCreateEvent, canManageEvent, type EventManageAccess } from "../../manage-access";
 import { registrationsAdminMessages as registrationsText } from "../../registrations-messages";
 import { PageLinks } from "./form-parts";
 import type { MinistryOption } from "./event-form";
@@ -59,13 +60,23 @@ function hrefFor(filters: AdminEventFilters, page: number): string {
 /**
  * A lista de eventos no painel (CAP-12): do início mais distante ao mais próximo, com a situação, o ministério e as vagas.
  * Os filtros moram na URL (endereço compartilhável, botão voltar). Quem só tem `eventos.write.own` recebe do servidor
- * apenas os eventos do próprio ministério (BR-030). A permissão é do guard da rota; a API recusa de qualquer jeito (BR-076).
+ * apenas os eventos do próprio ministério (BR-030). Quem só lê os inscritos vê a lista para consulta (ADR-027): sem "Novo
+ * evento" e sem "Editar", e o nome leva aos inscritos. "Editar" é decidido por evento, para quem soma papéis. A permissão
+ * é do guard da rota; a API recusa de qualquer jeito (BR-076).
  */
-export function EventAdminList({ ministries }: { ministries: readonly MinistryOption[] }) {
+export function EventAdminList({
+  ministries,
+  access,
+}: {
+  ministries: readonly MinistryOption[];
+  access: EventManageAccess;
+}) {
   const [params, setParams] = useSearchParams();
   const filters = filtersFromParams(params);
   const query = useQuery(adminEventsQuery(filters));
   const filtered = filters.state !== null || filters.ministryId !== null;
+  const canCreate = canCreateEvent(access);
+  const editable = (event: AdminEvent) => canManageEvent(access, event.ministry?.id ?? null);
 
   function setFilter(name: "situacao" | "ministerio", value: string) {
     const next = new URLSearchParams(params);
@@ -81,7 +92,9 @@ export function EventAdminList({ ministries }: { ministries: readonly MinistryOp
       header: text.columns.title,
       cell: (event) => (
         <Link
-          to={`/admin/eventos/${event.id}`}
+          to={
+            editable(event) ? `/admin/eventos/${event.id}` : `/admin/eventos/${event.id}/inscritos`
+          }
           className="flex min-h-12 items-center font-bold text-foreground"
         >
           {event.title}
@@ -128,13 +141,15 @@ export function EventAdminList({ ministries }: { ministries: readonly MinistryOp
           >
             {registrationsText.title}
           </Link>
-          <Link
-            to={`/admin/eventos/${event.id}`}
-            aria-label={text.editEvent(event.title)}
-            className="inline-flex min-h-12 items-center px-2 font-bold"
-          >
-            {text.edit}
-          </Link>
+          {editable(event) ? (
+            <Link
+              to={`/admin/eventos/${event.id}`}
+              aria-label={text.editEvent(event.title)}
+              className="inline-flex min-h-12 items-center px-2 font-bold"
+            >
+              {text.edit}
+            </Link>
+          ) : null}
         </span>
       ),
     },
@@ -148,15 +163,17 @@ export function EventAdminList({ ministries }: { ministries: readonly MinistryOp
           <h1 className="m-0 text-[28px] leading-tight font-extrabold tracking-tight">
             {text.title}
           </h1>
-          <p className="m-0 text-muted-foreground">{text.intro}</p>
+          <p className="m-0 text-muted-foreground">{canCreate ? text.intro : text.introReadOnly}</p>
         </div>
-        <Link
-          to="/admin/eventos/novo"
-          className={buttonClassName({ size: "lg", className: "gap-2 px-4.5 font-bold" })}
-        >
-          <PlusIcon aria-hidden="true" className="size-[18px]" />
-          {text.newEvent}
-        </Link>
+        {canCreate ? (
+          <Link
+            to="/admin/eventos/novo"
+            className={buttonClassName({ size: "lg", className: "gap-2 px-4.5 font-bold" })}
+          >
+            <PlusIcon aria-hidden="true" className="size-[18px]" />
+            {text.newEvent}
+          </Link>
+        ) : null}
       </header>
 
       <form
@@ -221,7 +238,7 @@ export function EventAdminList({ ministries }: { ministries: readonly MinistryOp
               empty={
                 <EmptyState
                   title={filtered ? text.emptyFiltered : text.empty}
-                  description={filtered ? undefined : text.emptyHint}
+                  description={filtered || !canCreate ? undefined : text.emptyHint}
                 />
               }
             />

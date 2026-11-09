@@ -28,8 +28,9 @@ const bulletinParser = object({
   reference_date: string,
   title: string,
   summary_text: nullish(string),
-  pdf_url: string,
-  pdf_size_bytes: number,
+  pdf_url: nullish(string),
+  pdf_size_bytes: nullish(number),
+  external_url: nullish(string),
   published_at: string,
   status: oneOf(PUBLICATION_STATUSES),
   updated_at: nullish(string),
@@ -106,14 +107,39 @@ export async function createBulletin(
     .data;
 }
 
-export async function updateBulletin(id: number, input: BulletinInput): Promise<AdminBulletin> {
+function bulletinBody(input: BulletinInput) {
+  return {
+    edition_number: input.edition_number,
+    reference_date: input.reference_date,
+    title: input.title,
+    summary_text: input.summary_text.trim() === "" ? null : input.summary_text,
+    ...(input.published_at !== null ? { published_at: input.published_at } : {}),
+  };
+}
+
+/** Cadastra o boletim publicado por link, sem arquivo (BR-084). */
+export async function createLinkedBulletin(
+  input: BulletinInput,
+  externalUrl: string,
+): Promise<AdminBulletin> {
+  return bulletinEnvelope.parse(
+    await api.post<unknown>("/api/admin/bulletins", {
+      ...bulletinBody(input),
+      external_url: externalUrl,
+    }),
+  ).data;
+}
+
+/** Com `externalUrl`, o boletim passa a usar o link e o PDF que ele tinha é apagado (BR-084). */
+export async function updateBulletin(
+  id: number,
+  input: BulletinInput,
+  externalUrl: string | null = null,
+): Promise<AdminBulletin> {
   return bulletinEnvelope.parse(
     await api.patch<unknown>(`/api/admin/bulletins/${id}`, {
-      edition_number: input.edition_number,
-      reference_date: input.reference_date,
-      title: input.title,
-      summary_text: input.summary_text.trim() === "" ? null : input.summary_text,
-      ...(input.published_at !== null ? { published_at: input.published_at } : {}),
+      ...bulletinBody(input),
+      ...(externalUrl !== null ? { external_url: externalUrl } : {}),
     }),
   ).data;
 }

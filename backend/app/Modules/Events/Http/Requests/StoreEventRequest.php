@@ -16,7 +16,8 @@ use Illuminate\Validation\ValidationException;
 
 /**
  * `POST /api/admin/events`: o evento inteiro (contracts/openapi.yaml → EventInput). Quem só tem `eventos.write.own` cria
- * apenas no próprio ministério (403 nos outros). As datas sem fuso valem em Brasília. A coerência das datas (BR-025,
+ * apenas no próprio ministério (403 nos outros). O ministério responsável é opcional para todos: sem ele, o evento é geral
+ * (ADR-025). As datas sem fuso valem em Brasília. A coerência das datas (BR-025,
  * BR-026) e as regras do formulário (BR-031) vêm depois: as primeiras, da Action; as do formulário, daqui.
  */
 final class StoreEventRequest extends FormRequest
@@ -42,7 +43,7 @@ final class StoreEventRequest extends FormRequest
         return [
             'title' => ['required', 'string', 'min:3', 'max:150'],
             'slug' => ['required', 'string', 'max:160', 'regex:'.self::SLUG_PATTERN],
-            'ministry_id' => ['required', 'integer', Rule::exists('ministries_groups', 'id')->where('is_active', true)],
+            'ministry_id' => ['nullable', 'integer', Rule::exists('ministries_groups', 'id')->where('is_active', true)],
             'description' => ['required', 'string', 'max:20000'],
             'starts_at' => ['required', 'date'],
             'ends_at' => ['nullable', 'date'],
@@ -50,6 +51,9 @@ final class StoreEventRequest extends FormRequest
             'max_spots' => ['nullable', 'integer', 'min:1', 'max:100000'],
             'registration_deadline' => ['nullable', 'date'],
             'has_minors' => ['nullable', 'boolean'],
+            'asks_participant_name' => ['nullable', 'boolean'],
+            'asks_phone' => ['nullable', 'boolean'],
+            'asks_email' => ['nullable', 'boolean'],
             'is_published' => ['nullable', 'boolean'],
             'form_schema' => ['nullable', 'array'],
         ];
@@ -69,14 +73,14 @@ final class StoreEventRequest extends FormRequest
     }
 
     /**
-     * @return array{title: string, slug: string, ministry_id: int, description: string, starts_at: CarbonImmutable, ends_at: CarbonImmutable|null, location: string, max_spots: int|null, registration_deadline: CarbonImmutable|null, has_minors: bool, form_schema: FormSchema}
+     * @return array{title: string, slug: string, ministry_id: int|null, description: string, starts_at: CarbonImmutable, ends_at: CarbonImmutable|null, location: string, max_spots: int|null, registration_deadline: CarbonImmutable|null, has_minors: bool, asks_participant_name: bool, asks_phone: bool, asks_email: bool, form_schema: FormSchema}
      */
     public function fields(): array
     {
         return [
             'title' => trim((string) $this->input('title')),
             'slug' => (string) $this->input('slug'),
-            'ministry_id' => $this->integer('ministry_id'),
+            'ministry_id' => $this->filled('ministry_id') ? $this->integer('ministry_id') : null,
             'description' => (string) $this->input('description'),
             'starts_at' => PublicationInstant::parse((string) $this->input('starts_at')) ?? CarbonImmutable::now('UTC'),
             'ends_at' => PublicationInstant::parse($this->filled('ends_at') ? (string) $this->input('ends_at') : null),
@@ -84,6 +88,10 @@ final class StoreEventRequest extends FormRequest
             'max_spots' => $this->filled('max_spots') ? $this->integer('max_spots') : null,
             'registration_deadline' => PublicationInstant::parse($this->filled('registration_deadline') ? (string) $this->input('registration_deadline') : null),
             'has_minors' => $this->boolean('has_minors'),
+            // Sem o campo no pedido, o formulário pede o dado, como antes da ADR-025
+            'asks_participant_name' => $this->boolean('asks_participant_name', true),
+            'asks_phone' => $this->boolean('asks_phone', true),
+            'asks_email' => $this->boolean('asks_email', true),
             'form_schema' => $this->schema,
         ];
     }

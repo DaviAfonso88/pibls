@@ -12,11 +12,13 @@ import {
   useSnapshots,
 } from "../../../../test/fixtures";
 import { server } from "../../../../test/server";
+import { photos } from "~/content/photos";
 import { churchAge } from "~/content/quem-somos";
 import ComoChegar, { meta as comoChegarMeta } from "../como-chegar";
 import Grupos, { meta as gruposMeta } from "../grupos";
 import Home, { meta as homeMeta } from "../home";
 import Ministerios from "../ministerios";
+import PedidoDeOracao from "../pedido-de-oracao";
 import QuemSomos, { meta as quemSomosMeta } from "../quem-somos";
 
 beforeEach(() => {
@@ -81,6 +83,38 @@ describe("Início", () => {
     await expectNoA11yViolations(container);
   });
 
+  it("convida para a Ficha de Visitante logo depois dos horários, com link para o formulário", async () => {
+    useSnapshots();
+    const { container } = renderRoute(Home);
+
+    const visitor = await screen.findByRole("region", {
+      name: "É visitante? A gente quer conhecer você.",
+    });
+    expect(
+      within(visitor).getByRole("link", { name: /Preencher a Ficha de Visitante/ }),
+    ).toHaveAttribute("href", "/sou-visitante");
+    expect(within(visitor).getByRole("img", { name: photos.visitor.alt })).toBeVisible();
+    // As opções são as que o formulário oferece
+    expect(
+      within(visitor)
+        .getAllByRole("listitem")
+        .map((item) => item.textContent),
+    ).toEqual(["Receber uma visita", "Conhecer uma Célula de CL", "Participar de um grupo"]);
+    expect(
+      within(visitor).getByText(
+        "Seus dados ficam só com a equipe da igreja e são usados apenas para falar com você.",
+      ),
+    ).toBeVisible();
+
+    const schedule = screen.getByRole("region", { name: "Horários" });
+    const live = screen.getByRole("region", { name: "Transmissões e atendimento" });
+    expect(
+      schedule.compareDocumentPosition(visitor) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(visitor.compareDocumentPosition(live) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    await expectNoA11yViolations(container);
+  });
+
   it("tem a seção do pedido de oração, com link para a página, antes de 'Para ler nesta semana'", async () => {
     useSnapshots();
     renderRoute(Home);
@@ -101,6 +135,131 @@ describe("Início", () => {
     // "Para ler nesta semana" fecha a página
     const reading = await screen.findByRole("heading", { name: "Para ler nesta semana" });
     expect(prayer.compareDocumentPosition(reading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("divulga a Juventude Salt com o Culto Salt do quadro e o site deles em nova aba", async () => {
+    useSnapshots();
+    renderRoute(Home);
+
+    const youth = await screen.findByRole("region", { name: "Juventude Salt" });
+    const site = within(youth).getByRole("link", { name: /Conhecer o site da Juventude/ });
+    expect(site).toHaveAttribute("href", "https://juventude-salt.vercel.app/");
+    expect(site).toHaveAttribute("target", "_blank");
+    expect(site).toHaveAttribute("rel", "noopener noreferrer");
+    expect(site).toHaveTextContent("(abre em nova aba)");
+    expect(within(youth).getByRole("list", { name: "Pilares da Juventude" })).toHaveTextContent(
+      "FéComunidadeMissão",
+    );
+    // O dia e a hora vêm do quadro de horários, não de um texto fixo
+    expect(await within(youth).findByText("Culto Salt")).toBeVisible();
+    expect(within(youth).getByText("19h30")).toBeVisible();
+    expect(within(youth).getByText("1ª sexta-feira do mês · Presencial")).toBeVisible();
+
+    // Fica depois do pedido de oração e antes de "Para ler nesta semana"
+    const prayer = screen.getByRole("heading", { name: "Pedido de oração" });
+    const reading = await screen.findByRole("heading", { name: "Para ler nesta semana" });
+    expect(prayer.compareDocumentPosition(youth) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(youth.compareDocumentPosition(reading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("sem o Culto Salt no quadro, a seção da Juventude fica só com o convite para o site", async () => {
+    useSnapshots({
+      settings: settingsFixture({
+        schedule: [
+          {
+            day: "Domingo",
+            recurrence: "semanal",
+            activity: "EBD",
+            time: "09:00",
+            mode: "Presencial",
+          },
+        ],
+      }),
+    });
+    renderRoute(Home);
+
+    await screen.findByText("EBD");
+    const youth = screen.getByRole("region", { name: "Juventude Salt" });
+    expect(within(youth).getByRole("link", { name: /Conhecer o site da Juventude/ })).toBeVisible();
+    expect(within(youth).queryByText(/Culto Salt|sexta-feira/)).not.toBeInTheDocument();
+  });
+
+  it("convida para o Instagram da igreja, com o endereço das configurações, em nova aba", async () => {
+    useSnapshots({
+      settings: settingsFixture({
+        social_links: [
+          { network: "Facebook", url: "https://facebook.example.com/igreja" },
+          { network: "instagram", url: "https://www.instagram.com/pib_ls/" },
+        ],
+      }),
+    });
+    const { container } = renderRoute(Home);
+
+    const section = await screen.findByRole("region", { name: "Acompanhe a igreja no Instagram" });
+    const link = within(section).getByRole("link", { name: /Visitar o Instagram/ });
+    expect(link).toHaveAttribute("href", "https://www.instagram.com/pib_ls/");
+    expect(link).toHaveAttribute("target", "_blank");
+    expect(link).toHaveAttribute("rel", "noopener noreferrer");
+    expect(link).toHaveTextContent("(abre em nova aba)");
+    expect(within(section).getByText("@pib_ls")).toHaveAttribute("translate", "no");
+
+    // Fica depois da Juventude e antes de "Para ler nesta semana", que fecha a página
+    const youth = screen.getByRole("region", { name: "Juventude Salt" });
+    const reading = await screen.findByRole("heading", { name: "Para ler nesta semana" });
+    expect(youth.compareDocumentPosition(section) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(
+      section.compareDocumentPosition(reading) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    await expectNoA11yViolations(container);
+  });
+
+  it.each([
+    ["sem rede nenhuma cadastrada", []],
+    ["só com outra rede", [{ network: "Facebook", url: "https://facebook.example.com/igreja" }]],
+    ["com um endereço inseguro", [{ network: "Instagram", url: "javascript:alert(1)" }]],
+  ])("não mostra a seção do Instagram %s", async (_case, socialLinks) => {
+    useSnapshots({ settings: settingsFixture({ social_links: socialLinks }) });
+    renderRoute(Home);
+
+    await screen.findByText("EBD");
+    expect(
+      screen.queryByRole("heading", { name: "Acompanhe a igreja no Instagram" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ["usa o primeiro endereço válido", "javascript:alert(1)", "https://instagram.com/a/", "@a"],
+    ["não repete o @ do endereço", "https://instagram.com/@a", "", "@a"],
+    ["sem perfil no endereço, não mostra o @", "https://instagram.com/", "", null],
+    ["num endereço de publicação, não mostra o @", "https://instagram.com/p/abc/", "", null],
+  ])("Instagram: %s", async (_case, first, second, handle) => {
+    useSnapshots({
+      settings: settingsFixture({
+        social_links: [
+          { network: "Instagram", url: first },
+          { network: "Instagram", url: second },
+        ],
+      }),
+    });
+    renderRoute(Home);
+
+    const section = await screen.findByRole("region", { name: "Acompanhe a igreja no Instagram" });
+    expect(within(section).getByRole("link", { name: /Visitar o Instagram/ })).toHaveAttribute(
+      "href",
+      first.startsWith("https") ? first : second,
+    );
+    if (handle) expect(within(section).getByText(handle)).toBeVisible();
+    else expect(within(section).queryByText(/^@/)).not.toBeInTheDocument();
+  });
+
+  it("oferece o formulário de contato ao lado do WhatsApp", async () => {
+    useSnapshots();
+    renderRoute(Home);
+
+    expect(await screen.findByRole("link", { name: /Use o formulário/ })).toHaveAttribute(
+      "href",
+      "/contato",
+    );
   });
 
   it("'Para ler nesta semana' sem nada publicado ainda leva às listas de boletins e mensagens", async () => {
@@ -245,6 +404,11 @@ describe("Como chegar", () => {
       "href",
       "/sou-visitante",
     );
+    const firstVisit = screen.getByRole("region", { name: "Primeira visita?" });
+    expect(within(firstVisit).getByRole("img", { name: photos.firstVisit.alt })).toHaveAttribute(
+      "src",
+      "/images/oracao-800.webp",
+    );
   });
 
   it("não mostra mapa nem botões de rota quando as configurações não os têm", async () => {
@@ -268,17 +432,40 @@ describe("Como chegar", () => {
   });
 });
 
+describe("Pedido de oração", () => {
+  it("abre com a foto dos jovens em adoração", async () => {
+    renderRoute(PedidoDeOracao);
+
+    expect(await screen.findByRole("img", { name: photos.prayer.alt })).toHaveAttribute(
+      "src",
+      "/images/adoracao-jovens-800.webp",
+    );
+  });
+});
+
 describe("Ministérios", () => {
   it("lista só os ministérios, abre o item e leva ao contato com o ministério escolhido", async () => {
     useSnapshots();
     const { container } = renderRoute(Ministerios);
 
     expect(screen.getByRole("heading", { level: 1, name: "Ministérios" })).toBeVisible();
+    // A foto da abertura é só desta página; a do culto continua no banner do YouTube, na Início
+    expect(screen.getByRole("img", { name: photos.ministries.alt })).toHaveAttribute(
+      "src",
+      "/images/ministerios-800.webp",
+    );
     const list = await screen.findByRole("list");
     const names = within(list)
       .getAllByRole("listitem")
       .map((item) => item.querySelector("summary")?.textContent);
     expect(names).toEqual(["Comunicação", "Música"]);
+    // O selo da abertura conta só os ministérios (grupos e células ficam de fora)
+    expect(screen.getByText("ministérios em atividade").previousElementSibling).toHaveTextContent(
+      /^2$/,
+    );
+    expect(
+      screen.getByRole("heading", { level: 2, name: "Conheça cada ministério" }),
+    ).toBeVisible();
 
     const first = within(list).getAllByRole("listitem")[0] as HTMLElement;
     await userEvent.click(within(first).getByText("Comunicação"));
@@ -415,11 +602,20 @@ describe("Quem somos", () => {
     const { container } = renderRoute(QuemSomos);
 
     expect(screen.getByRole("heading", { level: 1, name: "Quem somos" })).toBeVisible();
+    expect(screen.getByRole("img", { name: photos.about.alt })).toHaveAttribute(
+      "src",
+      "/images/igreja-em-oracao-800.webp",
+    );
     expect(screen.getByText(String(churchAge()), { selector: "span" })).toBeVisible();
     expect(screen.getByText("anos de fé e serviço")).toBeVisible();
 
-    const timeline = screen.getByRole("heading", { name: "Nossa história" })
-      .parentElement as HTMLElement;
+    const shortcuts = screen.getByRole("navigation", { name: "Nesta página" });
+    expect(within(shortcuts).getByRole("link", { name: "Nossa história" })).toHaveAttribute(
+      "href",
+      "#historia",
+    );
+
+    const timeline = screen.getByRole("region", { name: "Nossa história" });
     expect(within(timeline).getAllByRole("listitem")).toHaveLength(6);
     expect(within(timeline).getByText("A fundação")).toBeVisible();
     expect(within(timeline).getByText("O novo pastor")).toBeVisible();
@@ -427,8 +623,7 @@ describe("Quem somos", () => {
     expect(screen.getByText("Pr. Alan Gefferson de Assunção Taques")).toBeVisible();
     expect(screen.getByText("À frente da igreja desde outubro de 2026.")).toBeVisible();
     expect(screen.getByText("Formação")).toBeVisible();
-    const pastors = screen.getByRole("heading", { name: "Pastores que serviram a igreja" })
-      .parentElement as HTMLElement;
+    const pastors = screen.getByRole("region", { name: "Pastores que serviram a igreja" });
     expect(within(pastors).getAllByRole("listitem")).toHaveLength(9);
     expect(within(pastors).getAllByRole("listitem")[0]).toHaveTextContent(
       "Pr. Vanduídes Cristovam dos Santos",
@@ -436,6 +631,10 @@ describe("Quem somos", () => {
 
     expect(screen.getByRole("heading", { level: 2, name: "Como somos" })).toBeVisible();
     expect(screen.getByText("As pessoas, de fato, importam para nós!")).toBeVisible();
+    const pillars = within(screen.getByRole("region", { name: "Como somos" }));
+    for (const pillar of ["A Bíblia", "O amor", "A missão"]) {
+      expect(pillars.getByRole("heading", { level: 3, name: pillar })).toBeVisible();
+    }
     expect(screen.getByRole("heading", { level: 3, name: "Ceia do Senhor" })).toBeVisible();
     expect(screen.getByText(/ceia é realizada todo primeiro domingo do mês/)).toBeVisible();
 
@@ -450,8 +649,7 @@ describe("Quem somos", () => {
       "/contribua",
     );
 
-    const member = screen.getByRole("heading", { name: "Quer ser membro da igreja?" }).parentElement
-      ?.parentElement?.parentElement as HTMLElement;
+    const member = screen.getByRole("region", { name: "Quer ser membro da igreja?" });
     expect(within(member).getByRole("link", { name: "Quero ser membro" })).toHaveAttribute(
       "href",
       "/quero-ser-membro",

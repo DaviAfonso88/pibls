@@ -16,7 +16,7 @@ import { NavLink, Link } from "react-router";
 import { cn } from "~/shared/lib/utils";
 import { useAuth } from "../auth-context";
 import { accessMessages } from "../messages";
-import { roleLabel, type PermissionRequirement } from "../permissions";
+import { SEE_EVENTS, roleLabel, type PermissionRequirement } from "../permissions";
 
 /** Quais itens do menu mostram o selo de novos (a contagem vem de quem monta o painel, que conhece a API de contatos). */
 export type MenuBadge = "contacts" | "prayer";
@@ -86,7 +86,8 @@ export const MENU: readonly MenuGroup[] = [
         to: "/admin/eventos",
         label: menu.events,
         icon: CalendarIcon,
-        permission: ["eventos.write", "eventos.write.own"],
+        // Quem só lê inscritos também chega aos eventos por aqui, para consulta (ADR-027)
+        permission: SEE_EVENTS,
         feature: "events",
       },
     ],

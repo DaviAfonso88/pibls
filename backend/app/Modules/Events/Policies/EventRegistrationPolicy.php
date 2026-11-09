@@ -14,7 +14,8 @@ use Illuminate\Auth\Access\Response;
 /**
  * Quem vê, exporta e cancela as inscrições de um evento (CAP-15; BR-034, BR-076, BR-081).
  *
- * - Ver e exportar: `eventos.inscricoes.read` (qualquer evento) ou `.read.own` (só os do próprio ministério).
+ * - Ver e exportar: `eventos.inscricoes.read` (qualquer evento) ou `.read.own` (os do próprio ministério e os gerais,
+ *   sem ministério: ADR-025).
  * - Cancelar (exclusão definitiva): a mesma permissão de escrita do evento, `EventPolicy::manage`.
  * - Quem só tem `.own` e pede um evento de outro ministério recebe 404 (BR-030); quem não tem nenhuma permissão, 403.
  */
@@ -28,6 +29,7 @@ final class EventRegistrationPolicy
     /** A lista e o CSV das inscrições de um evento. */
     public function viewAny(User $user, Event $event): Response
     {
+        // Evento sem ministério é geral (ADR-025): o `PermissionGate` libera o nulo para quem tem `.read.own`
         if ($this->gate->allows($user, PermissionKey::EventosInscricoesRead)
             || $this->gate->allows($user, PermissionKey::EventosInscricoesReadOwn, $event->ministry_id)) {
             return Response::allow();

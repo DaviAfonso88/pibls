@@ -1,6 +1,13 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeftIcon, CircleAlertIcon, FileCheckIcon, Trash2Icon } from "lucide-react";
+import {
+  ArrowLeftIcon,
+  CircleAlertIcon,
+  FileCheckIcon,
+  LinkIcon,
+  Trash2Icon,
+  TriangleAlertIcon,
+} from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { Link, useNavigate } from "react-router";
@@ -33,6 +40,7 @@ import { Textarea } from "~/shared/ui/textarea";
 import {
   adminBulletinQuery,
   createBulletin,
+  createLinkedBulletin,
   deleteBulletin,
   replaceBulletinPdf,
   updateBulletin,
@@ -40,8 +48,16 @@ import {
   type BulletinInput,
 } from "../../admin-api";
 import { contentAdminMessages } from "../../admin-messages";
+import { BULLETIN_LINK_MAX_LENGTH } from "../../bulletin-link";
 import { bulletinSchema, type BulletinValues } from "../../schemas";
-import { DraftBanner, FormSection, PublishWhen, SavedNotice, whenLabel } from "./form-parts";
+import {
+  DraftBanner,
+  FormSection,
+  PublishWhen,
+  SavedNotice,
+  radioOption,
+  whenLabel,
+} from "./form-parts";
 
 const {
   bulletin: text,
@@ -51,7 +67,13 @@ const {
 } = contentAdminMessages;
 
 const PDF_MAX_BYTES = 10 * 1024 * 1024;
-const FIELDS = ["edition_number", "reference_date", "title", "summary_text"] as const;
+const FIELDS = [
+  "edition_number",
+  "reference_date",
+  "title",
+  "summary_text",
+  "external_url",
+] as const;
 
 /** O domingo de hoje (ou o próximo), na data de São Paulo: a sugestão do campo "Domingo de referência". */
 export function nextSunday(now: Date = new Date()): string {
@@ -66,16 +88,23 @@ const EMPTY: BulletinValues = {
   reference_date: "",
   title: "",
   summary_text: "",
+  source: "pdf",
+  external_url: "",
   when: "now",
   scheduled_at: "",
 };
 
-/** O rascunho vem do `localStorage`, que o usuário pode editar: confere o formato antes de usar. */
+/**
+ * O rascunho vem do `localStorage`, que o usuário pode editar: confere o formato antes de usar. Os rascunhos guardados
+ * antes de existir a opção de link não têm os dois campos dela: voltam como PDF, em vez de serem descartados.
+ */
 const draftShape = z.object({
   edition_number: z.string(),
   reference_date: z.string(),
   title: z.string(),
   summary_text: z.string(),
+  source: z.enum(["pdf", "link"]).catch("pdf"),
+  external_url: z.string().catch(""),
   when: z.enum(["now", "schedule"]),
   scheduled_at: z.string(),
 });
@@ -91,6 +120,8 @@ function valuesOf(bulletin: AdminBulletin): BulletinValues {
     reference_date: bulletin.reference_date,
     title: bulletin.title,
     summary_text: bulletin.summary_text ?? "",
+    source: bulletin.external_url ? "link" : "pdf",
+    external_url: bulletin.external_url ?? "",
     when: bulletin.status === "AGENDADO" ? "schedule" : "now",
     scheduled_at: bulletin.status === "AGENDADO" ? toDateTimeLocal(bulletin.published_at) : "",
   };
@@ -139,9 +170,10 @@ function UploadProgress({
 }
 
 /**
- * Cadastro e edição de boletim (design: AdminBoletim; CAP-02): edição, domingo, título, resumo, PDF com progresso,
- * quando publicar e a prévia de como aparece no site. O rascunho dos campos de texto fica no navegador (FR-077); o PDF
- * nunca. BR-040 (edição única), BR-041 (PDF verdadeiro até 10 MB) e BR-042 (agendado fica invisível) valem no servidor.
+ * Cadastro e edição de boletim (design: AdminBoletim; CAP-02): edição, domingo, título, resumo, PDF com progresso ou
+ * link externo, quando publicar e a prévia de como aparece no site. O rascunho dos campos de texto fica no navegador
+ * (FR-077); o PDF nunca. BR-040 (edição única), BR-041 (PDF verdadeiro até 10 MB), BR-042 (agendado fica invisível) e
+ * BR-084 (PDF ou link) valem no servidor.
  */
 export function BulletinForm({ id, userId }: { id: number | null; userId: number }) {
   const editing = id !== null;
@@ -160,6 +192,7 @@ export function BulletinForm({ id, userId }: { id: number | null; userId: number
     reset,
     setError,
     setValue,
+    clearErrors,
     watch,
     formState: { errors, isDirty },
   } = form;
@@ -185,6 +218,7 @@ export function BulletinForm({ id, userId }: { id: number | null; userId: number
 
   // O registro chegou: preenche o formulário com ele (uma vez)
   useEffect(() => {
+    register("source");
     register("when");
     register("scheduled_at");
   }, [register]);
@@ -205,6 +239,7 @@ export function BulletinForm({ id, userId }: { id: number | null; userId: number
   const save = useMutation({
     mutationFn: async (formValues: BulletinValues) => {
       const input = toInput(formValues, bulletin);
+      const link = formValues.source === "link" ? formValues.external_url : null;
       abort.current = new AbortController();
       const upload = {
         signal: abort.current.signal,
@@ -212,12 +247,13 @@ export function BulletinForm({ id, userId }: { id: number | null; userId: number
       };
 
       if (!editing) {
+        if (link !== null) return createLinkedBulletin(input, link);
         if (pdf === null) throw new Error(text.fileRequired);
         return createBulletin(input, pdf, upload);
       }
 
-      const updated = await updateBulletin(id, input);
-      if (pdf !== null) {
+      const updated = await updateBulletin(id, input, link);
+      if (link === null && pdf !== null) {
         try {
           return await replaceBulletinPdf(id, pdf, upload);
         } catch (error) {
@@ -255,14 +291,22 @@ export function BulletinForm({ id, userId }: { id: number | null; userId: number
     setProblem(null);
     setPdfError(undefined);
 
-    if (!editing && pdf === null) {
+    const usesPdf = formValues.source === "pdf";
+    // Na edição só falta o arquivo quando o boletim era por link e passa a ser por PDF
+    if (usesPdf && pdf === null && !bulletin?.pdf_url) {
       setPdfError(text.fileRequired);
       return;
     }
 
     // A barra de progresso aparece já ao começar a enviar o PDF, antes do primeiro aviso de progresso
-    if (pdf !== null) setProgress(0);
+    if (usesPdf && pdf !== null) setProgress(0);
     save.mutate(formValues, { onError: (error) => showError(error) });
+  }
+
+  function chooseSource(next: BulletinValues["source"]): void {
+    setValue("source", next, { shouldDirty: true });
+    clearErrors("external_url");
+    setPdfError(undefined);
   }
 
   function showError(error: unknown): void {
@@ -340,6 +384,7 @@ export function BulletinForm({ id, userId }: { id: number | null; userId: number
   }
 
   const whenValue = values.when;
+  const usesLink = values.source === "link";
   const alreadyPublished = bulletin?.status === "PUBLICADO";
   const percent = progress ?? 0;
   const busy = save.isPending;
@@ -439,8 +484,54 @@ export function BulletinForm({ id, userId }: { id: number | null; userId: number
               </FormField>
             </FormSection>
 
-            <FormSection title={text.fileSection} id="t-pdf">
-              {progress !== null ? (
+            <FormSection>
+              <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
+                <legend className="mb-2 text-lg font-extrabold">{text.sourceSection}</legend>
+                <label className={radioOption}>
+                  <input
+                    type="radio"
+                    name="origem"
+                    className="size-5"
+                    checked={!usesLink}
+                    disabled={busy}
+                    onChange={() => chooseSource("pdf")}
+                  />
+                  {text.sourcePdf}
+                </label>
+                <label className={radioOption}>
+                  <input
+                    type="radio"
+                    name="origem"
+                    className="size-5"
+                    checked={usesLink}
+                    disabled={busy}
+                    onChange={() => chooseSource("link")}
+                  />
+                  {text.sourceLink}
+                </label>
+              </fieldset>
+
+              {usesLink ? (
+                <FormField
+                  id="link"
+                  label={text.linkLabel}
+                  hint={text.linkHint}
+                  error={errors.external_url?.message}
+                >
+                  {(control) => (
+                    <Input
+                      {...control}
+                      type="url"
+                      inputMode="url"
+                      autoComplete="off"
+                      spellCheck={false}
+                      maxLength={BULLETIN_LINK_MAX_LENGTH}
+                      placeholder={text.linkPlaceholder}
+                      {...register("external_url")}
+                    />
+                  )}
+                </FormField>
+              ) : progress !== null ? (
                 <UploadProgress
                   name={pdf?.name ?? ""}
                   percent={percent}
@@ -464,7 +555,7 @@ export function BulletinForm({ id, userId }: { id: number | null; userId: number
                   disabled={busy}
                 />
               )}
-              {bulletin ? (
+              {bulletin?.pdf_url ? (
                 <p className="m-0 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
                   <FileCheckIcon aria-hidden="true" className="size-4" />
                   {text.currentFile}:{" "}
@@ -472,6 +563,32 @@ export function BulletinForm({ id, userId }: { id: number | null; userId: number
                     {text.openCurrent}
                   </a>
                 </p>
+              ) : null}
+              {bulletin?.external_url ? (
+                <p className="m-0 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                  <LinkIcon aria-hidden="true" className="size-4" />
+                  {text.currentLink}:{" "}
+                  <a
+                    href={bulletin.external_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-bold"
+                  >
+                    {text.openCurrentLink}
+                  </a>
+                </p>
+              ) : null}
+              {bulletin?.pdf_url && usesLink ? (
+                <Alert variant="warning">
+                  <TriangleAlertIcon aria-hidden="true" />
+                  {text.linkReplacesPdf}
+                </Alert>
+              ) : null}
+              {bulletin?.external_url && !usesLink ? (
+                <Alert variant="warning">
+                  <TriangleAlertIcon aria-hidden="true" />
+                  {text.pdfReplacesLink}
+                </Alert>
               ) : null}
             </FormSection>
 
@@ -534,7 +651,7 @@ export function BulletinForm({ id, userId }: { id: number | null; userId: number
                 </Button>
               ) : null}
             </div>
-            {!editing && pdf === null && !pdfError ? (
+            {!usesLink && pdf === null && !bulletin?.pdf_url && !pdfError ? (
               <p className="m-0 text-sm text-muted-foreground">{text.fileRequired}</p>
             ) : null}
           </form>
@@ -560,14 +677,16 @@ export function BulletinForm({ id, userId }: { id: number | null; userId: number
                 >
                   {text.previewRead}
                 </span>
-                <span
-                  className={buttonClassName({
-                    variant: "outline",
-                    className: "pointer-events-none px-3.5 font-bold",
-                  })}
-                >
-                  {text.previewDownload}
-                </span>
+                {usesLink ? null : (
+                  <span
+                    className={buttonClassName({
+                      variant: "outline",
+                      className: "pointer-events-none px-3.5 font-bold",
+                    })}
+                  >
+                    {text.previewDownload}
+                  </span>
+                )}
               </span>
             </div>
             <p className="m-0 text-sm text-muted-foreground">{draftText.note}</p>

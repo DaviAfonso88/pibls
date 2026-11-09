@@ -7,10 +7,11 @@ import { mockAdminDefaults, mockMe, renderAdmin, userFixture } from "../../../..
 import { resetQueryCache, useSnapshots } from "../../../../test/fixtures";
 import { server } from "../../../../test/server";
 import { draftKey, readDraft } from "~/shared/drafts";
+import { isBulletinLink } from "../bulletin-link";
 
 /*
  * Boletins no painel (T122; design: AdminBoletins, AdminBoletim). BR-040 (edição única), BR-041 (PDF verdadeiro até
- * 10 MB), BR-042 (agendado), FR-077 (rascunho local, sem o PDF).
+ * 10 MB), BR-042 (agendado), BR-084 (PDF ou link), FR-077 (rascunho local, sem o PDF).
  */
 
 const COMUNICACAO = userFixture("COMUNICACAO");
@@ -515,7 +516,8 @@ describe("edição", () => {
     await waitFor(() => expect(title).toHaveValue("Semana 1931"));
     expect(screen.getByLabelText("Edição nº")).toHaveValue("1931");
     // Já publicado: não há o que reagendar
-    expect(screen.queryByRole("radio")).toBeNull();
+    expect(screen.queryByRole("radio", { name: "Agendar para depois" })).toBeNull();
+    expect(screen.getByRole("radio", { name: "Arquivo PDF" })).toBeChecked();
     expect(screen.getByText(/Publicado em 17\/10\/2026/)).toBeVisible();
     expect(screen.getByRole("link", { name: "Abrir o PDF atual" })).toHaveAttribute(
       "href",
@@ -611,6 +613,244 @@ describe("edição", () => {
     expect(await screen.findByText("Não encontramos este boletim.")).toBeVisible();
     const back = screen.getAllByRole("link", { name: "Boletins" });
     expect(back.map((link) => link.getAttribute("href"))).toContain("/admin/boletins");
+  });
+});
+
+describe("boletim por link (BR-084)", () => {
+  const LINK = "https://heyzine.com/flip-book/4954dbb36f.html";
+  const linked = (id: number) =>
+    bulletin(id, { pdf_url: null, pdf_size_bytes: null, external_url: LINK });
+
+  async function fillWithLink(user: ReturnType<typeof userEvent.setup>) {
+    await user.type(await screen.findByLabelText("Edição nº"), "1932");
+    await user.type(screen.getByLabelText("Título"), "Semana da Família");
+    await user.click(screen.getByRole("radio", { name: "Link" }));
+  }
+
+  it("publica só com o link, sem pedir arquivo, e a prévia não oferece 'Baixar PDF'", async () => {
+    let body: Record<string, unknown> | null = null;
+    server.use(
+      http.post("*/api/admin/bulletins", async ({ request }) => {
+        body = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({ data: linked(1932) }, { status: 201 });
+      }),
+    );
+    const user = userEvent.setup();
+    const { container } = renderAdmin("/admin/boletins/novo");
+
+    // Por padrão continua sendo o PDF
+    expect(await screen.findByRole("radio", { name: "Arquivo PDF" })).toBeChecked();
+    expect(screen.getByText("Baixar PDF")).toBeVisible();
+
+    await fillWithLink(user);
+
+    expect(screen.queryByRole("group", { name: "Arquivo do boletim (PDF)" })).toBeNull();
+    expect(screen.queryByText("Envie o PDF para poder publicar.")).toBeNull();
+    expect(screen.queryByText("Baixar PDF")).toBeNull();
+    await expectNoA11yViolations(container);
+
+    await user.type(screen.getByLabelText("Link do boletim"), LINK);
+    await user.click(screen.getByRole("button", { name: "Publicar agora" }));
+
+    expect(await screen.findByText("Boletim publicado!")).toBeVisible();
+    expect(body).toMatchObject({
+      edition_number: 1932,
+      title: "Semana da Família",
+      external_url: LINK,
+    });
+  });
+
+  it("recusa no navegador o link que não é https e não envia nada", async () => {
+    let called = false;
+    server.use(
+      http.post("*/api/admin/bulletins", () => {
+        called = true;
+        return HttpResponse.json({ data: linked(1932) }, { status: 201 });
+      }),
+    );
+    const user = userEvent.setup();
+    renderAdmin("/admin/boletins/novo");
+    await fillWithLink(user);
+
+    const field = screen.getByLabelText("Link do boletim");
+    await user.type(field, "http://heyzine.com/flip-book/1.html");
+    await user.click(screen.getByRole("button", { name: "Publicar agora" }));
+
+    expect(
+      await screen.findByText("Informe um link completo, que comece com https://."),
+    ).toBeVisible();
+    expect(field).toHaveAttribute("aria-invalid", "true");
+    expect(called).toBe(false);
+  });
+
+  it("mostra no campo o link recusado pelo servidor", async () => {
+    server.use(
+      http.post("*/api/admin/bulletins", () =>
+        apiError("VALIDATION_ERROR", "Confira os campos destacados.", 422, [
+          { field: "external_url", code: "invalid", message: "Link recusado pelo servidor." },
+        ]),
+      ),
+    );
+    const user = userEvent.setup();
+    renderAdmin("/admin/boletins/novo");
+    await fillWithLink(user);
+
+    await user.type(screen.getByLabelText("Link do boletim"), LINK);
+    await user.click(screen.getByRole("button", { name: "Publicar agora" }));
+
+    expect(await screen.findByText("Link recusado pelo servidor.")).toBeVisible();
+    expect(screen.getByLabelText("Link do boletim")).toHaveAttribute("aria-invalid", "true");
+  });
+
+  it("um PDF escolhido antes não vai junto quando a pessoa muda para o link", async () => {
+    const fields = captureFormFields();
+    let body: Record<string, unknown> | null = null;
+    server.use(
+      http.post("*/api/admin/bulletins", async ({ request }) => {
+        body = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({ data: linked(1932) }, { status: 201 });
+      }),
+    );
+    const user = userEvent.setup();
+    renderAdmin("/admin/boletins/novo");
+    await screen.findByLabelText("Edição nº");
+    await user.upload(document.querySelector<HTMLInputElement>("#pdf") as HTMLInputElement, pdf());
+
+    await fillWithLink(user);
+    await user.type(screen.getByLabelText("Link do boletim"), LINK);
+    await user.click(screen.getByRole("button", { name: "Publicar agora" }));
+
+    expect(await screen.findByText("Boletim publicado!")).toBeVisible();
+    expect(fields.has("pdf")).toBe(false);
+    expect(body).toMatchObject({ external_url: LINK });
+  });
+
+  it("ao editar um boletim com PDF, avisa que ele será apagado e manda o link no PATCH", async () => {
+    const calls: string[] = [];
+    let patch: Record<string, unknown> | null = null;
+    server.use(
+      http.get("*/api/admin/bulletins/1931", () => HttpResponse.json({ data: bulletin(1931) })),
+      http.patch("*/api/admin/bulletins/1931", async ({ request }) => {
+        calls.push("patch");
+        patch = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({ data: linked(1931) });
+      }),
+      http.post("*/api/admin/bulletins/1931/pdf", () => {
+        calls.push("pdf");
+        return HttpResponse.json({ data: bulletin(1931) });
+      }),
+      http.get("*/api/admin/bulletins", () =>
+        HttpResponse.json({ data: [linked(1931)], meta: meta(1) }),
+      ),
+    );
+    const user = userEvent.setup();
+    const { router } = renderAdmin("/admin/boletins/1931");
+    await waitFor(() => expect(screen.getByLabelText("Título")).toHaveValue("Semana 1931"));
+    const warning = "Ao salvar, o PDF atual é apagado e o site passa a abrir este link.";
+    expect(screen.queryByText(warning)).toBeNull();
+
+    await user.click(screen.getByRole("radio", { name: "Link" }));
+    expect(screen.getByText(warning)).toBeVisible();
+    await user.type(screen.getByLabelText("Link do boletim"), LINK);
+    await user.click(screen.getByRole("button", { name: "Salvar alterações" }));
+
+    await waitFor(() => expect(router.state.location.pathname).toBe("/admin/boletins"));
+    expect(calls).toEqual(["patch"]);
+    expect(patch).toMatchObject({ external_url: LINK });
+  });
+
+  it("abre o boletim por link com o endereço e, para voltar ao PDF, exige o arquivo", async () => {
+    const calls: string[] = [];
+    let patch: Record<string, unknown> | null = null;
+    const fields = captureFormFields();
+    server.use(
+      http.get("*/api/admin/bulletins/1931", () => HttpResponse.json({ data: linked(1931) })),
+      http.patch("*/api/admin/bulletins/1931", async ({ request }) => {
+        calls.push("patch");
+        patch = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({ data: linked(1931) });
+      }),
+      http.post("*/api/admin/bulletins/1931/pdf", () => {
+        calls.push("pdf");
+        return HttpResponse.json({ data: bulletin(1931) });
+      }),
+      http.get("*/api/admin/bulletins", () =>
+        HttpResponse.json({ data: [bulletin(1931)], meta: meta(1) }),
+      ),
+    );
+    const user = userEvent.setup();
+    const { router } = renderAdmin("/admin/boletins/1931");
+
+    expect(await screen.findByRole("radio", { name: "Link" })).toBeChecked();
+    await waitFor(() => expect(screen.getByLabelText("Link do boletim")).toHaveValue(LINK));
+    const current = screen.getByRole("link", { name: "Abrir o link atual" });
+    expect(current).toHaveAttribute("href", LINK);
+    expect(current).toHaveAttribute("rel", "noopener noreferrer");
+    expect(screen.queryByRole("link", { name: "Abrir o PDF atual" })).toBeNull();
+
+    await user.click(screen.getByRole("radio", { name: "Arquivo PDF" }));
+    expect(
+      screen.getByText("Ao salvar, o link sai e o site passa a abrir o PDF enviado."),
+    ).toBeVisible();
+
+    await user.click(screen.getByRole("button", { name: "Salvar alterações" }));
+    const group = await screen.findByRole("group", { name: "Arquivo do boletim (PDF)" });
+    expect(await within(group).findByText("Envie o PDF para poder publicar.")).toBeVisible();
+    expect(calls).toEqual([]);
+
+    await user.upload(
+      document.querySelector<HTMLInputElement>("#pdf") as HTMLInputElement,
+      pdf("novo.pdf"),
+    );
+    await user.click(screen.getByRole("button", { name: "Salvar alterações" }));
+
+    await waitFor(() => expect(router.state.location.pathname).toBe("/admin/boletins"));
+    expect(calls).toEqual(["patch", "pdf"]);
+    expect(patch).not.toHaveProperty("external_url");
+    expect((fields.get("pdf") as File).name).toBe("novo.pdf");
+  });
+
+  it("guarda a escolha e o link no rascunho", async () => {
+    const key = draftKey(COMUNICACAO.id, "boletim", "novo");
+    window.localStorage.setItem(
+      key,
+      JSON.stringify({
+        savedAt: Date.now(),
+        value: {
+          edition_number: "1940",
+          reference_date: "2026-11-01",
+          title: "Rascunho",
+          summary_text: "",
+          source: "link",
+          external_url: LINK,
+          when: "now",
+          scheduled_at: "",
+        },
+      }),
+    );
+    const user = userEvent.setup();
+    renderAdmin("/admin/boletins/novo");
+
+    await user.click(await screen.findByRole("button", { name: "Restaurar" }));
+
+    expect(screen.getByRole("radio", { name: "Link" })).toBeChecked();
+    expect(screen.getByLabelText("Link do boletim")).toHaveValue(LINK);
+  });
+
+  it.each([
+    [LINK, true],
+    ["https://exemplo.com.br/boletim?edicao=1#p2", true],
+    ["http://heyzine.com/flip-book/1.html", false],
+    ["heyzine.com/flip-book/1.html", false],
+    ["javascript:alert(1)", false],
+    ["https://usuario:senha@heyzine.com/1.html", false],
+    ["https://localhost/1.html", false],
+    ["https://192.168.0.10/1.html", false],
+    ["https://heyzine.com/flip book.html", false],
+    [`https://heyzine.com/${"a".repeat(500)}`, false],
+    ["", false],
+  ])("isBulletinLink(%s) = %s", (value, expected) => {
+    expect(isBulletinLink(value)).toBe(expected);
   });
 });
 

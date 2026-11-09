@@ -15,8 +15,9 @@ use Illuminate\Foundation\Http\FormRequest;
 
 /**
  * `POST /api/public/events/{slug}/register` (contracts/openapi.yaml → RegistrationInput; BR-001, BR-004). Aqui só o
- * que não depende do evento: o formato dos campos fixos. Quem exige o responsável, o consentimento de saúde e as
- * respostas é a Action, contra o formulário vigente lido sob o bloqueio do evento (BR-023, BR-024, BR-083).
+ * que não depende do evento: o formato dos campos fixos. Quem exige o nome e o telefone (o evento pode não pedi-los,
+ * ADR-025), o responsável, o consentimento de saúde e as respostas é a Action, contra o formulário vigente lido sob o
+ * bloqueio do evento (BR-023, BR-024, BR-083).
  */
 final class RegisterForEventRequest extends FormRequest
 {
@@ -31,8 +32,8 @@ final class RegisterForEventRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'participant_name' => ['required', 'string', new ValidPersonName],
-            'phone' => ['required', 'string', new ValidPhone],
+            'participant_name' => ['nullable', 'string', new ValidPersonName],
+            'phone' => ['nullable', 'string', new ValidPhone],
             'email' => ['nullable', 'string', new ValidEmail],
             'guardian_name' => ['nullable', 'string', new ValidPersonName],
             'guardian_phone' => ['nullable', 'string', new ValidPhone],
@@ -49,9 +50,7 @@ final class RegisterForEventRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'participant_name.required' => __('business.BR-004.0'),
             'participant_name.string' => __('business.BR-004.0'),
-            'phone.required' => __('business.BR-004.1'),
             'phone.string' => __('business.BR-004.1'),
             'email.string' => __('business.BR-004.2'),
             'guardian_name.string' => __('business.BR-023'),
@@ -64,17 +63,18 @@ final class RegisterForEventRequest extends FormRequest
     }
 
     /**
-     * Os campos fixos normalizados: nome sem espaços sobrando, telefones em E.164, e-mail em minúsculas.
+     * Os campos fixos normalizados: nome sem espaços sobrando, telefones em E.164, e-mail em minúsculas. O que não veio
+     * fica nulo.
      *
-     * @return array{participant_name: string, phone: string, email: string|null, guardian_name: string|null, guardian_phone: string|null, guardian_consent: bool|null, answers: array<array-key, mixed>, health_consent: bool|null}
+     * @return array{participant_name: string|null, phone: string|null, email: string|null, guardian_name: string|null, guardian_phone: string|null, guardian_consent: bool|null, answers: array<array-key, mixed>, health_consent: bool|null}
      */
     public function registration(): array
     {
         $data = $this->validated();
 
         return [
-            'participant_name' => PersonName::from((string) $data['participant_name'])->value(),
-            'phone' => PhoneNumber::from((string) $data['phone'])->e164(),
+            'participant_name' => PersonName::tryFrom($data['participant_name'] ?? null)?->value(),
+            'phone' => PhoneNumber::tryFrom($data['phone'] ?? null)?->e164(),
             'email' => EmailAddress::tryFrom($data['email'] ?? null)?->value(),
             'guardian_name' => PersonName::tryFrom($data['guardian_name'] ?? null)?->value(),
             'guardian_phone' => PhoneNumber::tryFrom($data['guardian_phone'] ?? null)?->e164(),

@@ -16,8 +16,9 @@ use Illuminate\Support\Facades\DB;
 use Throwable;
 
 /**
- * Troca o PDF do boletim (BR-041). O arquivo novo é gravado primeiro; só depois do banco confirmar o antigo é apagado,
- * para uma falha nunca deixar o boletim apontando para um arquivo que não existe.
+ * Troca o PDF do boletim (BR-041), ou o coloca no lugar do link externo (BR-084). O arquivo novo é gravado primeiro; só
+ * depois do banco confirmar o antigo é apagado, para uma falha nunca deixar o boletim apontando para um arquivo que não
+ * existe.
  */
 final class ReplaceBulletinPdf
 {
@@ -36,6 +37,7 @@ final class ReplaceBulletinPdf
                 $bulletin->forceFill([
                     'pdf_path' => $stored->path,
                     'pdf_size_bytes' => $stored->sizeBytes,
+                    'external_url' => null,
                     'updated_by' => $actor->getKey(),
                 ])->save();
 
@@ -50,7 +52,9 @@ final class ReplaceBulletinPdf
             throw $e;
         }
 
-        $this->uploads->delete($previousPath);
+        if ($previousPath !== null) {
+            $this->uploads->delete($previousPath);
+        }
 
         return $bulletin;
     }

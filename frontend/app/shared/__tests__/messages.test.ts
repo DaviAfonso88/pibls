@@ -64,6 +64,7 @@ const ruleToBr = {
   formatRemoved: "BR-046",
   pdfType: "BR-041",
   pdfSize: "BR-041",
+  bulletinLink: "BR-084",
   qrImage: "BR-045",
   pixPassword: "BR-060",
   pixAlertBlocked: "BR-063",

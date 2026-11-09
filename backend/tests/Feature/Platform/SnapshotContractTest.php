@@ -84,7 +84,7 @@ it('home.json traz o último boletim, as 3 últimas mensagens e eventos vazios c
     $home = snapshotFile($this->snapshotDir, 'home')['data'];
 
     expect($home['latest_bulletin']['id'])->toBe($latest->id)
-        ->and($home['latest_bulletin'])->toHaveKeys(['id', 'edition_number', 'reference_date', 'title', 'summary_text', 'pdf_url', 'pdf_size_bytes'])
+        ->and($home['latest_bulletin'])->toHaveKeys(['id', 'edition_number', 'reference_date', 'title', 'summary_text', 'pdf_url', 'pdf_size_bytes', 'external_url'])
         ->and($home['latest_bulletin']['reference_date'])->toBe('2026-10-04')
         ->and($home['latest_bulletin']['pdf_url'])->toStartWith('/uploads/')
         ->and(array_column($home['latest_posts'], 'title'))->toBe(['Mensagem 4', 'Mensagem 3', 'Mensagem 2'])

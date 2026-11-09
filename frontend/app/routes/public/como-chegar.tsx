@@ -1,6 +1,7 @@
 import { directionsMessages } from "~/features/content/messages";
 import { ExternalLinkIcon, NavigationIcon } from "lucide-react";
 import { Link } from "react-router";
+import { photos } from "~/content/photos";
 import { formatCep, formatScheduleTime } from "~/shared/format";
 import { PageHeader } from "~/shared/layout/page-header";
 import { messages } from "~/shared/messages";
@@ -12,6 +13,7 @@ import { buttonClassName } from "~/shared/ui/button-variants";
 import { ErrorState } from "~/shared/ui/error-state";
 import { LoadingBlock } from "~/shared/ui/loading-block";
 import { MapFacade, isAllowedMapEmbed } from "~/shared/ui/map-facade";
+import { Photo } from "~/shared/ui/photo";
 import { MapPinIcon } from "lucide-react";
 
 export function meta() {
@@ -117,7 +119,7 @@ export default function ComoChegar() {
             ) : null}
 
             {days.length > 0 ? (
-              <section aria-labelledby="quando" className={card}>
+              <section aria-labelledby="quando" className={`${card} self-stretch`}>
                 <h2 id="quando" className="m-0 text-xl leading-tight">
                   {directionsMessages.whenToCome}
                 </h2>
@@ -131,7 +133,7 @@ export default function ComoChegar() {
                 ))}
                 <Link
                   to="/#horarios"
-                  className="inline-flex min-h-11 items-center self-start font-bold text-primary underline-offset-4 hover:underline"
+                  className="mt-auto inline-flex min-h-11 items-center self-start font-bold text-primary underline-offset-4 hover:underline"
                 >
                   {messages.site.allSchedules}
                 </Link>
@@ -142,6 +144,12 @@ export default function ComoChegar() {
               aria-labelledby="primeira-visita"
               className="flex min-w-[min(100%,21rem)] flex-1 flex-col gap-2.5 rounded-2xl border border-info-border bg-info p-6 text-info-foreground"
             >
+              <Photo
+                photo={photos.firstVisit}
+                sizes="(min-width: 1152px) 486px, (min-width: 768px) calc(50vw - 4.5rem), calc(100vw - 5rem)"
+                className="mb-1.5 aspect-21/9 rounded-xl"
+                imgClassName="object-[50%_70%]"
+              />
               <h2 id="primeira-visita" className="m-0 text-xl leading-tight text-info-foreground">
                 {directionsMessages.firstVisit}
               </h2>

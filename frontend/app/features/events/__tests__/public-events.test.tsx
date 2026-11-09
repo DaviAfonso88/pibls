@@ -42,6 +42,9 @@ function detail(overrides: Record<string, unknown> = {}) {
     description: "<p>Um dia inteiro de comunhão.</p>",
     banner_url: null,
     has_minors: false,
+    asks_participant_name: true,
+    asks_phone: true,
+    asks_email: true,
     form_schema: [],
     ...overrides,
   };

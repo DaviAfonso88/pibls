@@ -14,7 +14,8 @@ use Illuminate\Validation\Rule;
 /**
  * `PATCH /api/admin/events/{id}`: os mesmos campos do cadastro, todos opcionais. Serve também para publicar e despublicar
  * (`is_published`) e para "Encerrar inscrições" (`registration_deadline` = agora). Evento de outro ministério, para quem só
- * tem `.own`, é 404 (BR-030); passar o evento para outro ministério exige poder escrever nos dois.
+ * tem `.own`, é 404 (BR-030); passar o evento para outro ministério exige poder escrever nos dois. Deixá-lo sem
+ * ministério (`ministry_id: null`) o torna geral, que qualquer um com permissão de escrita de eventos gerencia (ADR-025).
  */
 final class UpdateEventRequest extends FormRequest
 {
@@ -24,9 +25,11 @@ final class UpdateEventRequest extends FormRequest
     {
         Gate::authorize('manage', $this->route('event'));
 
-        // Um ministry_id que não é número cai na validação (422); só o que é número passa pela permissão
+        // Um ministry_id que não é número cai na validação (422); só o número e o nulo passam pela permissão
         if (is_numeric($this->input('ministry_id'))) {
             Gate::authorize('moveTo', [Event::class, (int) $this->input('ministry_id')]);
+        } elseif ($this->exists('ministry_id') && $this->input('ministry_id') === null) {
+            Gate::authorize('moveTo', [Event::class, null]);
         }
 
         return true;
@@ -40,7 +43,7 @@ final class UpdateEventRequest extends FormRequest
         return [
             'title' => ['sometimes', 'required', 'string', 'min:3', 'max:150'],
             'slug' => ['sometimes', 'required', 'string', 'max:160', 'regex:'.StoreEventRequest::SLUG_PATTERN],
-            'ministry_id' => ['sometimes', 'required', 'integer', Rule::exists('ministries_groups', 'id')->where('is_active', true)],
+            'ministry_id' => ['sometimes', 'nullable', 'integer', Rule::exists('ministries_groups', 'id')->where('is_active', true)],
             'description' => ['sometimes', 'required', 'string', 'max:20000'],
             'starts_at' => ['sometimes', 'required', 'date'],
             'ends_at' => ['sometimes', 'nullable', 'date'],
@@ -48,6 +51,9 @@ final class UpdateEventRequest extends FormRequest
             'max_spots' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:100000'],
             'registration_deadline' => ['sometimes', 'nullable', 'date'],
             'has_minors' => ['sometimes', 'required', 'boolean'],
+            'asks_participant_name' => ['sometimes', 'required', 'boolean'],
+            'asks_phone' => ['sometimes', 'required', 'boolean'],
+            'asks_email' => ['sometimes', 'required', 'boolean'],
             'is_published' => ['sometimes', 'required', 'boolean'],
             'form_schema' => ['sometimes', 'array'],
             'confirm_schema_change' => ['sometimes', 'nullable', 'boolean'],
@@ -89,7 +95,7 @@ final class UpdateEventRequest extends FormRequest
         }
 
         if ($this->exists('ministry_id')) {
-            $changes['ministry_id'] = $this->integer('ministry_id');
+            $changes['ministry_id'] = $this->filled('ministry_id') ? $this->integer('ministry_id') : null;
         }
 
         if ($this->exists('starts_at')) {
@@ -106,7 +112,7 @@ final class UpdateEventRequest extends FormRequest
             $changes['max_spots'] = $this->filled('max_spots') ? $this->integer('max_spots') : null;
         }
 
-        foreach (['has_minors', 'is_published'] as $key) {
+        foreach (['has_minors', 'asks_participant_name', 'asks_phone', 'asks_email', 'is_published'] as $key) {
             if ($this->exists($key)) {
                 $changes[$key] = $this->boolean($key);
             }

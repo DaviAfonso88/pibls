@@ -25,6 +25,24 @@ export type PermissionKey = (typeof PERMISSION_KEYS)[number];
 /** Aceita uma chave ou uma lista (qualquer uma libera). */
 export type PermissionRequirement = PermissionKey | readonly PermissionKey[];
 
+/** Quem gerencia eventos: de qualquer ministério ou do próprio. */
+export const MANAGE_EVENTS = [
+  "eventos.write",
+  "eventos.write.own",
+] as const satisfies readonly PermissionKey[];
+
+/** Quem lê os inscritos: de qualquer evento ou dos do próprio ministério. */
+export const READ_REGISTRATIONS = [
+  "eventos.inscricoes.read",
+  "eventos.inscricoes.read.own",
+] as const satisfies readonly PermissionKey[];
+
+/** Quem vê a lista de eventos do painel: quem gerencia e quem só lê os inscritos, este para consulta (ADR-027). */
+export const SEE_EVENTS = [
+  ...MANAGE_EVENTS,
+  ...READ_REGISTRATIONS,
+] as const satisfies readonly PermissionKey[];
+
 export function isPermissionKey(value: string): value is PermissionKey {
   return (PERMISSION_KEYS as readonly string[]).includes(value);
 }

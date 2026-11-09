@@ -12,4 +12,6 @@ export const institution = {
   siteUrl: "https://pibls.com",
   /** Fundação da igreja (ISO 8601): de onde sai a idade de "Quem somos" e o "desde 1985" da página inicial. */
   foundedOn: "1985-01-13",
+  /** Site próprio da Juventude Salt (jovens e adolescentes), divulgado na Início e no rodapé. */
+  youthSite: { name: "Juventude Salt", url: "https://juventude-salt.vercel.app/" },
 } as const;

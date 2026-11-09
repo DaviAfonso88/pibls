@@ -165,6 +165,9 @@ export function emptyValues(ministryId: number | null): EventValues {
     max_spots: "",
     registration_deadline: "",
     has_minors: false,
+    asks_participant_name: true,
+    asks_phone: true,
+    asks_email: true,
     form_schema: [],
   };
 }
@@ -184,6 +187,9 @@ export function valuesOf(event: AdminEvent): EventValues {
       ? toDateTimeLocal(event.registration_deadline)
       : "",
     has_minors: event.has_minors,
+    asks_participant_name: event.asks_participant_name,
+    asks_phone: event.asks_phone,
+    asks_email: event.asks_email,
     form_schema: fieldsFromApi(event.form_schema),
   };
 }
@@ -193,7 +199,7 @@ export function toInput(values: EventValues): EventInput {
   return {
     title: values.title.trim(),
     slug: values.slug,
-    ministry_id: Number(values.ministry_id),
+    ministry_id: values.ministry_id === "" ? null : Number(values.ministry_id),
     description: values.description,
     starts_at: toApiDateTime(values.starts_at),
     ends_at: values.ends_at === "" ? null : toApiDateTime(values.ends_at),
@@ -202,6 +208,9 @@ export function toInput(values: EventValues): EventInput {
     registration_deadline:
       values.registration_deadline === "" ? null : toApiDateTime(values.registration_deadline),
     has_minors: values.has_minors,
+    asks_participant_name: values.asks_participant_name,
+    asks_phone: values.asks_phone,
+    asks_email: values.asks_email,
     form_schema: fieldsToInput(values.form_schema),
   };
 }

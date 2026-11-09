@@ -648,7 +648,7 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
     post:
       tags: [Painel — boletins]
-      summary: Cria boletim com PDF (BR-040, BR-041)
+      summary: Cria boletim com PDF ou com link externo (BR-040, BR-041, BR-084)
       x-permission: boletins.write
       security:
         - sessionCookie: []
@@ -659,7 +659,8 @@ paths:
           multipart/form-data:
             schema:
               type: object
-              required: [edition_number, reference_date, title, pdf]
+              required: [edition_number, reference_date, title]
+              description: 'Exige `pdf` ou `external_url`, nunca os dois (BR-084).'
               properties:
                 edition_number: { type: integer, minimum: 1 }
                 reference_date: { type: string, format: date }
@@ -667,6 +668,18 @@ paths:
                 summary_text: { type: string, maxLength: 5000 }
                 published_at: { type: string, format: date-time, description: 'Padrão: agora' }
                 pdf: { type: string, format: binary, description: 'PDF verdadeiro, até 10 MB' }
+                external_url: { type: string, format: uri, maxLength: 500, description: 'Link https, sem PDF (ADR-026)' }
+          application/json:
+            schema:
+              type: object
+              required: [edition_number, reference_date, title, external_url]
+              properties:
+                edition_number: { type: integer, minimum: 1 }
+                reference_date: { type: string, format: date }
+                title: { type: string, minLength: 3, maxLength: 150 }
+                summary_text: { type: [string, 'null'], maxLength: 5000 }
+                published_at: { type: string, format: date-time, description: 'Padrão: agora' }
+                external_url: { type: string, format: uri, maxLength: 500, description: 'Link https (ADR-026)' }
       responses:
         '201':
           description: Criado (regenera snapshots)
@@ -706,6 +719,7 @@ paths:
                 title: { type: string, minLength: 3, maxLength: 150 }
                 summary_text: { type: [string, 'null'], maxLength: 5000 }
                 published_at: { type: string, format: date-time }
+                external_url: { type: string, format: uri, maxLength: 500, description: 'O link toma o lugar do PDF, que é apagado do disco (BR-084)' }
       responses:
         '200':
           description: Atualizado
@@ -928,8 +942,8 @@ paths:
       - $ref: '#/components/parameters/Id'
     get:
       tags: [Painel — eventos (R2)]
-      summary: Evento (404 fora do escopo .own)
-      x-permission: 'eventos.write | eventos.write.own'
+      summary: Evento, para editar ou para a tela de inscritos (404 fora do escopo .own — ADR-027)
+      x-permission: 'eventos.write | eventos.write.own | eventos.inscricoes.read | eventos.inscricoes.read.own'
       security:
         - sessionCookie: []
       responses:
@@ -1625,15 +1639,17 @@ components:
     # ── Boletins ──
     BulletinPublic:
       type: object
-      required: [id, edition_number, reference_date, title, pdf_url, pdf_size_bytes]
+      required: [id, edition_number, reference_date, title, pdf_url, pdf_size_bytes, external_url]
+      description: 'Vem um de cada vez: os campos do PDF ou `external_url` (BR-084).'
       properties:
         id: { type: integer }
         edition_number: { type: integer }
         reference_date: { type: string, format: date }
         title: { type: string }
         summary_text: { type: [string, 'null'] }
-        pdf_url: { type: string, example: '/uploads/boletins/2026/3f9c…e1.pdf' }
-        pdf_size_bytes: { type: integer }
+        pdf_url: { type: [string, 'null'], example: '/uploads/boletins/2026/3f9c…e1.pdf' }
+        pdf_size_bytes: { type: [integer, 'null'] }
+        external_url: { type: [string, 'null'], format: uri, example: 'https://heyzine.com/flip-book/4954dbb36f.html' }
     BulletinAdmin:
       allOf:
         - $ref: '#/components/schemas/BulletinPublic'

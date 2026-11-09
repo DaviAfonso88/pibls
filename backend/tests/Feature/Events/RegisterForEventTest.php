@@ -146,6 +146,50 @@ it('o e-mail é opcional', function () {
     expect(EventRegistration::query()->sole()->email)->toBeNull();
 });
 
+it('ADR-025 evento que não pede nome, telefone nem e-mail inscreve sem eles e não enfileira confirmação', function () {
+    openEvent(['asks_participant_name' => false, 'asks_phone' => false, 'asks_email' => false]);
+
+    postJson('/api/public/events/acampamento/register', ['answers' => [], 'consent' => true])->assertCreated()
+        ->assertJsonPath('data.participant_name', null)
+        ->assertJsonPath('data.confirmation_email_queued', false);
+
+    $registration = EventRegistration::query()->sole();
+    expect($registration->participant_name)->toBeNull()
+        ->and($registration->participant_name_normalized)->toBeNull()
+        ->and($registration->phone)->toBeNull()
+        ->and($registration->email)->toBeNull()
+        ->and(DB::table('jobs')->count())->toBe(0);
+});
+
+it('ADR-025 campo fixo que o evento não pede é descartado, mesmo que venha no envio', function () {
+    openEvent(['asks_phone' => false, 'asks_email' => false]);
+
+    postJson('/api/public/events/acampamento/register', registrationBody())->assertCreated();
+
+    $registration = EventRegistration::query()->sole();
+    expect($registration->participant_name)->toBe('Ana Souza')
+        ->and($registration->phone)->toBeNull()
+        ->and($registration->email)->toBeNull();
+});
+
+it('BR-004 o campo fixo que o evento pede continua obrigatório', function () {
+    openEvent(['asks_participant_name' => false]);
+
+    postJson('/api/public/events/acampamento/register', registrationBody(['participant_name' => null, 'phone' => null]))
+        ->assertUnprocessable()
+        ->assertFieldErrors(['phone'])
+        ->assertJsonMissingPath('error.details.1');
+});
+
+it('BR-022 sem o nome ou sem o telefone no formulário, a repetição não é barrada', function () {
+    openEvent(['asks_participant_name' => false]);
+
+    postJson('/api/public/events/acampamento/register', registrationBody())->assertCreated();
+    postJson('/api/public/events/acampamento/register', registrationBody())->assertCreated();
+
+    expect(EventRegistration::query()->count())->toBe(2);
+});
+
 it('com a flag desligada, a página, a lista e a inscrição respondem 404', function () {
     openEvent();
     config(['features.events' => false]);

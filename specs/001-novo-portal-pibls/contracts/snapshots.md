@@ -64,7 +64,7 @@ Destaques da página inicial.
 ```json
 {
   "data": {
-    "latest_bulletin": { "id": 120, "edition_number": 1234, "reference_date": "2026-11-08", "title": "…", "summary_text": "…", "pdf_url": "/uploads/…", "pdf_size_bytes": 1843200 },
+    "latest_bulletin": { "id": 120, "edition_number": 1234, "reference_date": "2026-11-08", "title": "…", "summary_text": "…", "pdf_url": "/uploads/…", "pdf_size_bytes": 1843200, "external_url": null },
     "latest_posts": [ { "id": 15, "title": "…", "slug": "…", "excerpt": "…", "author_display": "…", "youtube_video_id": null, "published_at": "…" } ],
     "upcoming_events": []
   },

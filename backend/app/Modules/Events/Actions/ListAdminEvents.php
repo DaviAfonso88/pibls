@@ -9,11 +9,13 @@ use App\Modules\Access\Authorization\PermissionKey;
 use App\Modules\Access\Models\User;
 use App\Modules\Events\Enums\EventState;
 use App\Modules\Events\Models\Event;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Pagination\LengthAwarePaginator;
 
 /**
  * A lista de eventos do painel (CAP-12), com o total de inscritos de cada um. Quem escreve ou lê inscritos de qualquer
- * ministério vê todos; quem só tem `.own` vê os do próprio ministério, e os demais nem aparecem (BR-030).
+ * ministério vê todos; quem só tem `.own` vê os do próprio ministério e os gerais, sem ministério (ADR-025), e os demais
+ * nem aparecem (BR-030).
  */
 final class ListAdminEvents
 {
@@ -32,7 +34,8 @@ final class ListAdminEvents
             ->withCount('registrations');
 
         if (! $this->seesAll($user)) {
-            $query->where('ministry_id', $user->ministry_id);
+            // O próprio ministério e os eventos gerais, sem ministério (ADR-025)
+            $query->where(fn (Builder $own) => $own->where('ministry_id', $user->ministry_id)->orWhereNull('ministry_id'));
         }
 
         if ($ministryId !== null) {

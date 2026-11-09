@@ -131,7 +131,17 @@ it('BR-041 recusa PDF polyglot com tag PHP dentro, mesmo com a assinatura certa'
 })->with([
     '<?php' => ['<?php system($_GET["c"]); ?>'],
     '<?PHP maiúsculo' => ['<?PHP echo 1; ?>'],
-    '<?= atalho' => ['<?= `ls` ?>'],
+]);
+
+it('BR-041 aceita o PDF verdadeiro cujo conteúdo comprimido forma uma sequência parecida com tag PHP', function (string $bytes) {
+    $content = pdfBytes("3 0 obj\n<< /Filter /FlateDecode >>\nstream\n\x9C\xE2{$bytes}\xA7\x01\nendstream\nendobj\n");
+
+    $stored = uploads()->store(upload('boletim.pdf', $content, 'application/pdf'), UploadKind::BulletinPdf, 'pdf');
+
+    expect(Storage::disk('uploads')->get($stored->path))->toBe($content);
+})->with([
+    '<?=' => ['<?='],
+    '<?php colado em outro byte' => ["<?php\xA9"],
 ]);
 
 it('BR-041 encontra a tag PHP mesmo quando ela cai na divisa entre dois blocos de leitura', function () {
@@ -170,12 +180,15 @@ it('trata erro de upload do PHP por tamanho (upload_max_filesize) como 413', fun
     }
 });
 
-it('trata upload interrompido como arquivo inválido (422)', function () {
+it('trata upload interrompido como 422 sem dizer que o tipo está errado', function () {
     $tmp = tempnam(sys_get_temp_dir(), 'up');
     $file = new UploadedFile($tmp, 'a.pdf', 'application/pdf', UPLOAD_ERR_PARTIAL, true);
 
     try {
-        expect(fn () => uploads()->store($file, UploadKind::BulletinPdf, 'pdf'))->toThrow(ValidationException::class);
+        uploads()->store($file, UploadKind::BulletinPdf, 'pdf');
+        $this->fail('O upload interrompido deveria ser recusado.');
+    } catch (ValidationException $e) {
+        expect($e->errors())->toBe(['pdf' => ['O arquivo não chegou inteiro. Envie de novo.']]);
     } finally {
         @unlink((string) $tmp);
     }

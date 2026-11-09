@@ -47,10 +47,10 @@ final class AdminEventsController
         ]);
     }
 
-    /** `GET /api/admin/events/{id}`: o evento, para editar. */
+    /** `GET /api/admin/events/{id}`: o evento, para editar ou para a tela de inscritos (ADR-027). */
     public function show(Request $request, Event $event): JsonResponse
     {
-        Gate::authorize('manage', $event);
+        Gate::authorize('view', $event);
 
         return $this->respond(new SavedEvent($event, false));
     }

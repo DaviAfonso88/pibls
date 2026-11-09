@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace App\Modules\Content\Http\Requests;
 
+use App\Modules\Content\Support\BulletinLink;
 use App\Shared\Support\PublicationInstant;
 use Illuminate\Foundation\Http\FormRequest;
 
 /**
- * `PATCH /api/admin/bulletins/{id}`: só os metadados; todos opcionais. O PDF troca por `POST …/pdf`.
+ * `PATCH /api/admin/bulletins/{id}`: os metadados e o link externo; todos opcionais. O PDF troca por `POST …/pdf`.
+ * Mandar `external_url` faz o boletim passar a usar o link (BR-084); o caminho de volta é enviar um PDF.
  */
 final class UpdateBulletinRequest extends FormRequest
 {
@@ -28,7 +30,16 @@ final class UpdateBulletinRequest extends FormRequest
             'title' => ['sometimes', 'required', 'string', 'min:3', 'max:150'],
             'summary_text' => ['sometimes', 'nullable', 'string', 'max:5000'],
             'published_at' => ['sometimes', 'required', 'date'],
+            'external_url' => ['sometimes', 'required', 'string', BulletinLink::rule()],
         ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function messages(): array
+    {
+        return ['external_url.required' => __('business.BR-084.0')];
     }
 
     /**
@@ -50,6 +61,10 @@ final class UpdateBulletinRequest extends FormRequest
 
         if ($this->exists('published_at')) {
             $changes['published_at'] = PublicationInstant::parse((string) $this->input('published_at'));
+        }
+
+        if ($this->exists('external_url')) {
+            $changes['external_url'] = BulletinLink::tryParse((string) $this->input('external_url'))?->url;
         }
 
         return $changes;

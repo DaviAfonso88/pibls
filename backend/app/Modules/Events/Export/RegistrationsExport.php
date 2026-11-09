@@ -66,7 +66,7 @@ final class RegistrationsExport
     {
         $cells = [
             $registration->created_at->setTimezone(self::TIMEZONE)->format('d/m/Y H:i'),
-            $registration->participant_name,
+            (string) $registration->participant_name,
             self::phone($registration->phone),
             (string) $registration->email,
         ];

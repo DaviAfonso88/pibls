@@ -92,5 +92,10 @@ return [
     'BR-076' => 'Você não tem permissão para esta ação.',
     'BR-081' => 'Esta exclusão é definitiva e não pode ser desfeita. Confirmar?',
     'BR-083' => 'Para continuar, autorize o uso das informações de saúde.',
+    'BR-084' => [
+        'Informe um link completo, que comece com https://.',
+        'Envie o PDF ou informe o link do boletim.',
+        'Envie só o PDF ou só o link do boletim.',
+    ],
 
 ];
