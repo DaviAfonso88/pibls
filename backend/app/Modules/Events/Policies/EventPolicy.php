@@ -17,7 +17,8 @@ use Illuminate\Auth\Access\Response;
  *   permissão `.own` não concede nada (BR-075, 403).
  * - Evento de outro ministério, para quem só tem `.own`, "não existe": 404 (BR-030).
  * - Evento sem ministério é geral (ADR-025): quem tem `.own` (com ministério vinculado) o vê e gerencia como os do seu.
- * - Quem não tem nenhuma permissão de escrita de eventos recebe 403.
+ * - Quem só lê inscritos (`eventos.inscricoes.read[.own]`) também vê o evento, no mesmo escopo, mas não o altera (ADR-027).
+ * - Quem não tem nenhuma permissão de eventos recebe 403.
  */
 final class EventPolicy
 {
@@ -53,7 +54,24 @@ final class EventPolicy
         return $allowed ? Response::allow() : Response::deny(__('errors.forbidden'));
     }
 
-    /** Ver, alterar, publicar, excluir e trocar o banner de um evento. */
+    /**
+     * Ver um evento no painel (ADR-027): quem pode alterá-lo e quem lê os inscritos dele. A tela de inscritos precisa do
+     * evento (nome, formulário, vagas) para montar a lista, o CSV e o PDF; é o mesmo objeto que a lista já entrega.
+     */
+    public function view(User $user, Event $event): Response
+    {
+        if ($this->canWriteIn($user, $event->ministry_id) || $this->canReadRegistrationsOf($user, $event->ministry_id)) {
+            return Response::allow();
+        }
+
+        // Tem algum poder só no próprio ministério e o evento é de outro: não revela que existe
+        return $this->gate->allows($user, PermissionKey::EventosWriteOwn)
+            || $this->gate->allows($user, PermissionKey::EventosInscricoesReadOwn)
+            ? Response::denyAsNotFound(__('business.BR-030'))
+            : Response::deny(__('errors.forbidden'));
+    }
+
+    /** Alterar, publicar, excluir e trocar o banner de um evento. */
     public function manage(User $user, Event $event): Response
     {
         if ($this->canWriteIn($user, $event->ministry_id)) {
@@ -80,5 +98,12 @@ final class EventPolicy
     {
         return $this->gate->allows($user, PermissionKey::EventosWrite)
             || $this->gate->allows($user, PermissionKey::EventosWriteOwn, $ministryId);
+    }
+
+    /** O mesmo escopo da `EventRegistrationPolicy::viewAny`, inclusive para o evento geral (ADR-025). */
+    private function canReadRegistrationsOf(User $user, ?int $ministryId): bool
+    {
+        return $this->gate->allows($user, PermissionKey::EventosInscricoesRead)
+            || $this->gate->allows($user, PermissionKey::EventosInscricoesReadOwn, $ministryId);
     }
 }

@@ -9,6 +9,7 @@ use App\Modules\Platform\DomainEvents\PublicContentChanged;
 use App\Modules\Platform\Models\AuditLog;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event as EventBus;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Testing\TestResponse;
@@ -797,17 +798,44 @@ it('quem não tem permissão de eventos recebe 403', function (string $role) {
     deleteJson("/api/admin/events/{$event->getKey()}")->assertForbidden();
 })->with(['TESOURARIA', 'ORACAO', 'PASTORAL', 'ADMIN_TECNICO']);
 
-it('a Secretaria, que só lê inscritos, vê a lista de todos os eventos mas não escreve', function () {
+it('ADR-027 a Secretaria, que só lê inscritos, vê a lista e cada evento de qualquer ministério, mas não escreve', function () {
     asStaff('SECRETARIA');
-    $event = adminEvent();
+    $event = adminEvent(['title' => 'Retiro', 'form_schema' => adminEventSchema()]);
+    $general = adminEvent(['ministry_id' => null, 'slug' => 'geral']);
 
-    getJson('/api/admin/events')->assertOk()->assertJsonPath('meta.total', 1);
+    getJson('/api/admin/events')->assertOk()->assertJsonPath('meta.total', 2);
+    // A tela de inscritos monta as colunas, o CSV e o PDF a partir do evento
+    getJson("/api/admin/events/{$event->getKey()}")
+        ->assertOk()
+        ->assertJsonPath('data.title', 'Retiro')
+        ->assertJsonPath('data.form_schema.0.key', 'camiseta');
+    getJson("/api/admin/events/{$general->getKey()}")->assertOk();
 
     postJson('/api/admin/events', adminEventFields())->assertForbidden();
-    getJson("/api/admin/events/{$event->getKey()}")->assertForbidden();
     patchJson("/api/admin/events/{$event->getKey()}", ['title' => 'X'])->assertForbidden();
     deleteJson("/api/admin/events/{$event->getKey()}")->assertForbidden();
     postAdminEventBanner($event)->assertForbidden();
+
+    expect($event->fresh()->title)->toBe('Retiro');
+});
+
+it('ADR-027 BR-030 quem só lê os inscritos do próprio ministério vê o evento dele e os gerais; o de outro não existe', function () {
+    // Nenhum papel de referência tem `.read.own` sem `.write.own`; a combinação vem de linhas avulsas de `user_permissions`
+    $reader = asStaff('LIDER_MINISTERIO');
+    DB::table('user_permissions')
+        ->where('user_id', $reader->getKey())
+        ->where('permission_key', 'eventos.write.own')
+        ->delete();
+    $mine = adminEvent(['ministry_id' => $reader->ministry_id]);
+    $general = adminEvent(['ministry_id' => null, 'slug' => 'geral']);
+    $other = adminEvent(['slug' => 'outro']);
+
+    getJson("/api/admin/events/{$mine->getKey()}")->assertOk();
+    getJson("/api/admin/events/{$general->getKey()}")->assertOk();
+    getJson("/api/admin/events/{$other->getKey()}")->assertNotFound()->assertJsonPath('error.code', 'NOT_FOUND');
+
+    patchJson("/api/admin/events/{$mine->getKey()}", ['title' => 'X'])->assertForbidden();
+    deleteJson("/api/admin/events/{$mine->getKey()}")->assertForbidden();
 });
 
 it('sem sessão, 401', function () {

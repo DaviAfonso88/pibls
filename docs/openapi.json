@@ -571,7 +571,7 @@
         "/admin/events/{event}": {
             "get": {
                 "operationId": "admin.events.show",
-                "summary": "`GET /api/admin/events/{id}`: o evento, para editar",
+                "summary": "`GET /api/admin/events/{id}`: o evento, para editar ou para a tela de inscritos (ADR-027)",
                 "tags": [
                     "AdminEvents"
                 ],

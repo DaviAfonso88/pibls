@@ -201,6 +201,25 @@ describe("menu por permissão", () => {
     expect(off).toEqual(["Início"]);
   });
 
+  it("ADR-027 quem só lê inscritos (Secretaria) também vê Eventos, para chegar aos inscritos", () => {
+    const can = (permission: string | readonly string[]) =>
+      (Array.isArray(permission) ? permission : [permission]).some((key: string) =>
+        (ROLE_PERMISSIONS.SECRETARIA ?? []).includes(key),
+      );
+
+    const labels = visibleMenu(can, { events: true }).flatMap((group) =>
+      group.items.map((item) => item.label),
+    );
+
+    expect(labels).toEqual([
+      "Início",
+      "Contatos",
+      "Eventos",
+      "Ministérios e grupos",
+      "Configurações",
+    ]);
+  });
+
   it("grupo sem nenhum item visível some do menu", async () => {
     mockMe(userFixture("TESOURARIA"));
 

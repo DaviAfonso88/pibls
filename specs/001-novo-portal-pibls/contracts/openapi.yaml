@@ -942,8 +942,8 @@ paths:
       - $ref: '#/components/parameters/Id'
     get:
       tags: [Painel — eventos (R2)]
-      summary: Evento (404 fora do escopo .own)
-      x-permission: 'eventos.write | eventos.write.own'
+      summary: Evento, para editar ou para a tela de inscritos (404 fora do escopo .own — ADR-027)
+      x-permission: 'eventos.write | eventos.write.own | eventos.inscricoes.read | eventos.inscricoes.read.own'
       security:
         - sessionCookie: []
       responses:

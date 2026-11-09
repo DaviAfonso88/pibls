@@ -436,6 +436,27 @@ describe("cancelamento (FR-062, BR-034, BR-081)", () => {
     expect(screen.queryByRole("button", { name: /Cancelar a inscrição/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("columnheader", { name: "Ações" })).not.toBeInTheDocument();
   });
+
+  it("ADR-027 BR-030 quem lê os inscritos de todos e gerencia só outro ministério vê, mas não cancela", async () => {
+    mockMe(
+      userFixture("SECRETARIA", {
+        roles: ["SECRETARIA", "LIDER_MINISTERIO"],
+        permissions: [
+          "eventos.inscricoes.read",
+          "eventos.inscricoes.read.own",
+          "eventos.write.own",
+          "leads.read",
+        ],
+        // O evento é do ministério 2 (Música)
+        ministry: { id: 3, name: "Juventude" },
+      }),
+    );
+    mockRegistrations();
+    renderAdmin("/admin/eventos/1/inscritos");
+
+    expect(await screen.findByRole("row", { name: /Ana Souza/ })).toBeVisible();
+    expect(screen.queryByRole("button", { name: /Cancelar a inscrição/ })).not.toBeInTheDocument();
+  });
 });
 
 describe("exportações (FR-061)", () => {

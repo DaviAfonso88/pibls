@@ -50,7 +50,8 @@
 | `/admin/oracao[/:id]` | `leads.oracao.read` |
 | `/admin/boletins[/novo|/:id]` | `boletins.write` |
 | `/admin/palavra-viva[/novo|/:id]` | `mensagens.write` |
-| `/admin/eventos[/novo|/:id]` | `eventos.write` ou `eventos.write.own` (R2) |
+| `/admin/eventos` | `eventos.write` ou `.own`, ou `eventos.inscricoes.read` ou `.own`, este só para consulta (R2, ADR-027) |
+| `/admin/eventos/novo`, `/admin/eventos/:id` | `eventos.write` ou `eventos.write.own` (R2) |
 | `/admin/eventos/:id/inscritos` | `eventos.inscricoes.read` ou `.own` (R2) |
 | `/admin/ministerios[/novo|/:id]` | `ministerios.write` |
 | `/admin/configuracoes` | `settings.write` |

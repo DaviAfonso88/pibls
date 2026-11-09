@@ -14,6 +14,7 @@ import { LoadingBlock } from "~/shared/ui/loading-block";
 import { Spinner } from "~/shared/ui/spinner";
 import { adminEventQuery } from "../../admin-api";
 import { eventAdminMessages } from "../../admin-messages";
+import { canManageEvent, type EventManageAccess } from "../../manage-access";
 import { pdfFilename, renderRegistrationsPdf } from "../../pdf-export";
 import { formatRegisteredAt, registrationColumns } from "../../registration-columns";
 import {
@@ -57,9 +58,16 @@ function errorMessage(error: unknown, fallback: string): string {
  * Os inscritos de um evento no painel (design: AdminInscritos; CAP-15, FR-060 a FR-062): o contador de vagas, a lista com as
  * respostas na ordem do formulário, a busca, a exportação em CSV (gerada no servidor) e em PDF (gerada aqui, com o
  * `pdfmake` carregado só no clique) e o cancelamento com confirmação, que devolve a vaga. A permissão de ver é do guard da
- * rota e a de cancelar, de `canCancel`; o servidor confere as duas de novo (BR-076).
+ * rota; a de cancelar é a de editar este evento (`canManageEvent`), decidida depois de carregá-lo, porque quem lê os
+ * inscritos de todos e gerencia só o próprio ministério não cancela nos dos outros. O servidor confere as duas (BR-076).
  */
-export function RegistrationsPage({ eventId, canCancel }: { eventId: number; canCancel: boolean }) {
+export function RegistrationsPage({
+  eventId,
+  access,
+}: {
+  eventId: number;
+  access: EventManageAccess;
+}) {
   const queryClient = useQueryClient();
   const [params, setParams] = useSearchParams();
   const filters = filtersFromParams(params);
@@ -160,6 +168,7 @@ export function RegistrationsPage({ eventId, canCancel }: { eventId: number; can
 
   if (event === undefined) return <LoadingBlock count={4} className="mx-auto max-w-6xl" />;
 
+  const canCancel = canManageEvent(access, event.ministry?.id ?? null);
   const meta = listQuery.data?.meta;
   const total = meta?.spots_total ?? null;
   const filled = meta?.spots_filled ?? event.registrations_count;

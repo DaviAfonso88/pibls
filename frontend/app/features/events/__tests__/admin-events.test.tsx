@@ -4,7 +4,13 @@ import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { expectNoA11yViolations } from "../../../../test/axe";
-import { mockAdminDefaults, mockMe, renderAdmin, userFixture } from "../../../../test/admin";
+import {
+  ROLE_PERMISSIONS,
+  mockAdminDefaults,
+  mockMe,
+  renderAdmin,
+  userFixture,
+} from "../../../../test/admin";
 import { resetQueryCache, settingsFixture, useSnapshots } from "../../../../test/fixtures";
 import { server } from "../../../../test/server";
 import { draftKey } from "~/shared/drafts";
@@ -16,6 +22,16 @@ import { draftKey } from "~/shared/drafts";
 
 const COMUNICACAO = userFixture("COMUNICACAO");
 const LIDER = userFixture("LIDER_MINISTERIO", { ministry: { id: 2, name: "Música" } });
+const SECRETARIA = userFixture("SECRETARIA");
+/** Secretaria e líder do ministério 3: lê os inscritos de todos, mas só gerencia os do próprio ministério e os gerais. */
+const SECRETARIA_E_LIDER = userFixture("SECRETARIA", {
+  roles: ["SECRETARIA", "LIDER_MINISTERIO"],
+  permissions: [
+    ...(ROLE_PERMISSIONS.SECRETARIA ?? []),
+    ...(ROLE_PERMISSIONS.LIDER_MINISTERIO ?? []),
+  ],
+  ministry: { id: 3, name: "Juventude" },
+});
 
 beforeEach(() => {
   resetQueryCache();
@@ -140,7 +156,7 @@ describe("flag e permissão", () => {
     ).toBeVisible();
   });
 
-  it("BR-076 quem não tem eventos.write nem .own vê o aviso de falta de acesso", async () => {
+  it("BR-076 quem não gerencia eventos nem lê inscritos vê o aviso de falta de acesso", async () => {
     mockMe(userFixture("TESOURARIA"));
     renderAdmin("/admin/eventos");
 
@@ -253,6 +269,84 @@ describe("lista", () => {
     expect(await screen.findByRole("link", { name: "Editar o evento Evento 1" })).toBeVisible();
     // O filtro de ministério existe com mais de um ministério na lista; aqui o snapshot tem vários, então fica
     expect(screen.getByRole("combobox", { name: "Situação" })).toBeVisible();
+  });
+
+  it("ADR-027 a Secretaria, que só lê inscritos, vê a lista para consulta: sem 'Novo evento' nem 'Editar', e o nome leva aos inscritos", async () => {
+    mockMe(SECRETARIA);
+    server.use(
+      http.get("*/api/admin/events", () => HttpResponse.json({ data: [event(1)], meta: meta(1) })),
+    );
+    const { container } = renderAdmin("/admin/eventos");
+
+    expect(await screen.findByRole("heading", { level: 1, name: "Eventos" })).toBeVisible();
+    expect(screen.getByText("Acompanhe as vagas e os inscritos de cada evento.")).toBeVisible();
+    const table = await screen.findByRole("table", { name: "Eventos" });
+    expect(within(table).getByRole("link", { name: "Evento 1" })).toHaveAttribute(
+      "href",
+      "/admin/eventos/1/inscritos",
+    );
+    expect(
+      within(table).getByRole("link", { name: "Ver os inscritos de Evento 1" }),
+    ).toHaveAttribute("href", "/admin/eventos/1/inscritos");
+    expect(screen.queryByRole("link", { name: /Editar o evento/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Novo evento" })).not.toBeInTheDocument();
+
+    await expectNoA11yViolations(container);
+  });
+
+  it("ADR-027 sem eventos, a Secretaria não recebe a dica de criar o primeiro", async () => {
+    mockMe(SECRETARIA);
+    server.use(
+      http.get("*/api/admin/events", () => HttpResponse.json({ data: [], meta: meta(0) })),
+    );
+    renderAdmin("/admin/eventos");
+
+    expect(await screen.findByText("Nenhum evento por aqui ainda.")).toBeVisible();
+    expect(
+      screen.queryByText("Crie o primeiro evento para abrir inscrições."),
+    ).not.toBeInTheDocument();
+  });
+
+  it("ADR-027 BR-030 quem lê os inscritos de todos e gerencia só o próprio ministério edita só os dele e os gerais", async () => {
+    mockMe(SECRETARIA_E_LIDER);
+    server.use(
+      http.get("*/api/admin/events", () =>
+        HttpResponse.json({
+          data: [
+            event(1),
+            event(2, { ministry: { id: 3, name: "Juventude" } }),
+            event(3, { ministry: null }),
+          ],
+          meta: meta(3),
+        }),
+      ),
+    );
+    renderAdmin("/admin/eventos");
+
+    const table = await screen.findByRole("table", { name: "Eventos" });
+    expect(within(table).getByRole("link", { name: "Evento 1" })).toHaveAttribute(
+      "href",
+      "/admin/eventos/1/inscritos",
+    );
+    expect(within(table).queryByRole("link", { name: "Editar o evento Evento 1" })).toBeNull();
+    expect(within(table).getByRole("link", { name: "Editar o evento Evento 2" })).toHaveAttribute(
+      "href",
+      "/admin/eventos/2",
+    );
+    expect(within(table).getByRole("link", { name: "Editar o evento Evento 3" })).toHaveAttribute(
+      "href",
+      "/admin/eventos/3",
+    );
+    expect(screen.getByRole("link", { name: "Novo evento" })).toBeVisible();
+  });
+
+  it("ADR-027 a edição continua só para quem gerencia: a Secretaria vê o aviso de falta de acesso", async () => {
+    mockMe(SECRETARIA);
+    renderAdmin("/admin/eventos/1");
+
+    expect(
+      await screen.findByRole("heading", { name: "Você não tem acesso a esta área" }),
+    ).toBeVisible();
   });
 });
 

@@ -83,7 +83,7 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** `GET /api/admin/events/{id}`: o evento, para editar */
+        /** `GET /api/admin/events/{id}`: o evento, para editar ou para a tela de inscritos (ADR-027) */
         get: operations["admin.events.show"];
         put?: never;
         post?: never;

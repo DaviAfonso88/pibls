@@ -2005,6 +2005,14 @@ O site público é pré-renderizado e tem o JS inicial limitado a 160 KB gzip po
 
 **Decisão**: cada boletim tem um PDF ou um link externo `https` (BR-084), de qualquer serviço, como um flipbook do Heyzine. O servidor nunca acessa o link e o site nunca o embute: ele só vira o destino de "Ler boletim", em nova aba, e "Baixar PDF" não aparece. Nova coluna `bulletins.external_url`; `pdf_path` e `pdf_size_bytes` passam a aceitar `NULL` (migration *expand*). *Trade-off aceito*: o conteúdo fica fora do nosso controle e do nosso backup, e um link quebrado não é detectado.
 
+### ADR-027 — Quem lê inscritos também vê o evento e a lista de eventos no painel
+
+- **Status:** Aceita
+- **Data:** 2026-11-05
+- Texto completo em `docs/adr/0027-leitura-do-evento-por-quem-le-inscritos.md`.
+
+**Decisão**: `GET /api/admin/events/{id}` passa a aceitar também `eventos.inscricoes.read[.own]` (`EventPolicy::view`), no mesmo escopo da leitura de inscritos (`.own`: próprio ministério e eventos gerais; fora dele, 404). No painel, "Eventos" e `/admin/eventos` abrem para quem lê inscritos, em modo de consulta (sem "Novo evento" nem "Editar"; o nome leva aos inscritos). Criar, alterar, excluir e cancelar inscrição continuam só com escrita, e os botões de editar e cancelar são decididos por evento. Corrige a tela de inscritos da Secretaria, que recebia 403 ao carregar o evento.
+
 # Technology Stack
 
 > **Regra de versões**: a tabela traz a **linha de versão** escolhida. A versão exata (patch) é fixada no início da implementação (tarefa F0-01) com a última estável disponível, e passa a ser a fonte de verdade em `composer.lock` e `package-lock.json`, ambos versionados. `engines` (package.json) e `config.platform.php` (composer.json) travam os runtimes. A compatibilidade com a hospedagem segue a página da HostGator (Links úteis).
@@ -2678,7 +2686,11 @@ erDiagram
 - **Query**: `page`, `per_page`, `state` (estado derivado), `ministry_id`, `sort` (`-starts_at` padrão | `starts_at`).
 - **200**: lista com `registrations_count`.
 
-#### `POST /api/admin/events` · `GET | PATCH | DELETE /api/admin/events/{id}`
+#### `GET /api/admin/events/{id}`
+- **Perm**: `eventos.write` ou `.own`, ou `eventos.inscricoes.read` ou `.own`, para a tela de inscritos (ADR-027). Com `.own`, só os eventos do próprio ministério e os gerais (ADR-025); os de outro ministério dão **404**.
+- **200**: o evento, no mesmo formato do `POST`.
+
+#### `POST /api/admin/events` · `PATCH | DELETE /api/admin/events/{id}`
 - **Perm**: `eventos.write` ou `eventos.write.own` (com `.own`, `ministry_id` precisa ser o do usuário ou `null`, o evento geral: ADR-025).
 - **Body (POST/PATCH)**: campos do CAP-14 em JSON (`form_schema` como array) + `confirm_schema_change` (booleano, para BR-029).
 - **201/200**: o evento. **409**: `SPOTS_BELOW_REGISTRATIONS`, `SCHEMA_CHANGE_NEEDS_CONFIRMATION`, `DUPLICATE_SLUG`, `EVENT_HAS_REGISTRATIONS` (DELETE). **404**: evento de outro ministério, com `.own`. **403**: com `.own`, criar ou mover o evento para outro ministério. **422**: BR-025, BR-026, BR-031.
@@ -2791,7 +2803,8 @@ Atualização otimista: **não usada** (simplicidade; todas as mutações aguard
 | `/admin/oracao` · `/admin/oracao/:id` | Pedidos de oração | `leads.oracao.read` | — | ✓ |
 | `/admin/boletins` (+ `/novo`, `/:id`) | Boletins | `boletins.write` | — | ✓ |
 | `/admin/palavra-viva` (+ `/novo`, `/:id`) | Mensagens | `mensagens.write` | — | ✓ |
-| `/admin/eventos` (+ `/novo`, `/:id`) | Eventos e formulário de inscrição | `eventos.write` ou `.own` | — | ✓ |
+| `/admin/eventos` | Lista de eventos (só consulta para quem só lê inscritos, ADR-027) | `eventos.write` ou `.own`, ou `eventos.inscricoes.read` ou `.own` | — | ✓ |
+| `/admin/eventos/novo` · `/admin/eventos/:id` | Evento e formulário de inscrição | `eventos.write` ou `.own` | — | ✓ |
 | `/admin/eventos/:id/inscritos` | Inscritos, CSV e PDF | `eventos.inscricoes.read` ou `.own` | — | ✓ |
 | `/admin/ministerios` (+ `/novo`, `/:id`) | Ministérios, grupos, células | `ministerios.write` | — | ✓ |
 | `/admin/configuracoes` | Horários, avisos, endereço, links, destinatários | `settings.write` | — | ✓ |

@@ -159,7 +159,7 @@ return [
     ],
 
     // Eventos (US9, R2, com a flag ligada): `eventos.write` (qualquer ministério) ou `eventos.write.own` (o próprio). A lista
-    // também abre para quem lê inscritos. As rotas de um evento recebem o líder pelo `make`, que cria o evento no ministério
+    // e a leitura de um evento também abrem para quem lê inscritos (ADR-027). As rotas de um evento recebem o líder pelo `make`, que cria o evento no ministério
     // dele: o recorte por ministério (outro → 404, sem ministério → 403) está em AdminEventsTest. Os inscritos (US11) seguem a mesma regra: ver e exportar com `eventos.inscricoes.read[.own]`, cancelar com a permissão de escrita.
     [
         'method' => 'GET', 'uri' => '/api/admin/events', 'route' => 'api/admin/events', 'guard' => 'controller',
@@ -171,7 +171,7 @@ return [
     ],
     [
         'method' => 'GET', 'uri' => '', 'route' => 'api/admin/events/{event}', 'guard' => 'controller',
-        'permissions' => ['eventos.write', 'eventos.write.own'],
+        'permissions' => ['eventos.write', 'eventos.write.own', 'eventos.inscricoes.read', 'eventos.inscricoes.read.own'],
         'make' => fn (?User $user = null) => '/api/admin/events/'.eventOf($user)->getKey(),
     ],
     [

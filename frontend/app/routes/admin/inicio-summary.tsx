@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { Link } from "react-router";
 import { useAuth } from "~/features/access/auth-context";
 import { accessMessages } from "~/features/access/messages";
-import type { PermissionRequirement } from "~/features/access/permissions";
+import { READ_REGISTRATIONS, SEE_EVENTS } from "~/features/access/permissions";
 import {
   adminBulletinsQuery,
   adminPostsQuery,
@@ -30,16 +30,6 @@ import {
 } from "~/shared/ui/table";
 
 const { home } = accessMessages;
-
-const READ_REGISTRATIONS: PermissionRequirement = [
-  "eventos.inscricoes.read",
-  "eventos.inscricoes.read.own",
-];
-const SEE_EVENTS: PermissionRequirement = [
-  "eventos.write",
-  "eventos.write.own",
-  ...READ_REGISTRATIONS,
-];
 
 export function Card({ children, className }: { children: ReactNode; className: string }) {
   return (

@@ -6,6 +6,8 @@ export const eventAdminMessages = {
   list: {
     title: "Eventos",
     intro: "Eventos com inscrição: crie, publique e acompanhe as vagas.",
+    /** Para quem só lê os inscritos (ADR-027). */
+    introReadOnly: "Acompanhe as vagas e os inscritos de cada evento.",
     newEvent: "Novo evento",
     columns: {
       title: "Evento",
