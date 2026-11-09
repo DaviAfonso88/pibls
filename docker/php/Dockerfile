@@ -30,7 +30,7 @@ RUN echo "ServerName localhost" > /etc/apache2/conf-available/servername.conf \
     && a2enconf servername
 
 COPY entrypoint.sh /usr/local/bin/pibls-entrypoint
-RUN chmod +x /usr/local/bin/pibls-entrypoint
+RUN sed -i 's/\r$//' /usr/local/bin/pibls-entrypoint && chmod +x /usr/local/bin/pibls-entrypoint
 
 WORKDIR /var/www/html
 
