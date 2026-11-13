@@ -54,7 +54,9 @@ cp -R frontend/build/client/. "$work/stage/spa/"
 cp deploy/htaccess/public_html.htaccess "$work/stage/spa/.htaccess"
 
 echo "==> Backend (composer sem dev, autoloader otimizado e classmap autoritativo)"
-MSYS_NO_PATHCONV=1 docker compose exec -T -w "${container_work}/stage/backend" app \
+# COMPOSER_PROCESS_TIMEOUT=0: no Windows a pasta deploy/ é um bind mount lento, e descompactar o aws-sdk-php (milhares de
+# arquivos) passa dos 300 s padrão do Composer.
+MSYS_NO_PATHCONV=1 docker compose exec -T -e COMPOSER_PROCESS_TIMEOUT=0 -w "${container_work}/stage/backend" app \
   composer install --no-dev --no-interaction --no-progress --prefer-dist --optimize-autoloader --classmap-authoritative
 
 test ! -e "$work/stage/backend/.env" || { echo "Erro: .env no pacote" >&2; exit 1; }
