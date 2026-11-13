@@ -123,7 +123,7 @@ it('BR-009 recusa responsável inativo, sem a gestão do tipo ou que não existe
     expect($lead->refresh()->status)->toBe('NOVO')->and(LeadActivity::query()->count())->toBe(0);
 })->with([
     'inativo' => fn () => userWithRole('SECRETARIA', ['is_active' => false])->id,
-    'só lê (pastoral)' => fn () => userWithRole('PASTORAL')->id,
+    'só lê' => fn () => userWithPermissions(['leads.read'])->id,
     'outra permissão (oração)' => fn () => userWithRole('ORACAO')->id,
     'sem permissão' => fn () => User::factory()->create()->id,
     'inexistente' => fn () => 999999,
@@ -303,7 +303,7 @@ it('a permissão vem antes da validação: quem só lê recebe 403 e quem não v
     $visitor = Lead::factory()->visitante()->create();
     $prayer = Lead::factory()->oracao()->create();
 
-    asStaff('PASTORAL');
+    asStaffWith(['leads.read', 'leads.oracao.read']);
     $this->patchJson("/api/admin/leads/{$visitor->id}", ['status' => 'ARQUIVADO'])->assertForbidden();
     $this->patchJson("/api/admin/leads/{$prayer->id}", ['status' => 'ARQUIVADO'])->assertForbidden();
 
@@ -345,13 +345,17 @@ it('uma simples anotação não gera auditoria de status nem de responsável', f
 it('BR-009 lista os usuários ativos com a gestão do tipo, por nome', function () {
     userWithRole('SECRETARIA', ['name' => 'Zeca Secretaria']);
     userWithRole('SECRETARIA', ['name' => 'Beto Secretaria', 'is_active' => false]);
-    userWithRole('PASTORAL', ['name' => 'Pastor Só Lê']);
+    userWithPermissions(['leads.read'], ['name' => 'Pastor Só Lê']);
     userWithRole('ORACAO', ['name' => 'Equipe de Oração']);
     asStaff('SECRETARIA', ['name' => 'Ana Secretaria']);
 
     $names = fn (string $type) => array_column($this->getJson("/api/admin/leads/assignees?type={$type}")->assertOk()->json('data'), 'name');
 
     expect($names('CONTATO'))->toBe(['Ana Secretaria', 'Zeca Secretaria']);
+
+    // ADR-028: a Pastoral passa a atender contatos e entra na lista de responsáveis do tipo.
+    userWithRole('PASTORAL', ['name' => 'Pastor Que Atende']);
+    expect($names('CONTATO'))->toBe(['Ana Secretaria', 'Pastor Que Atende', 'Zeca Secretaria']);
 });
 
 it('a lista de responsáveis da oração traz só a equipe de oração', function () {
@@ -378,7 +382,7 @@ it('a lista de responsáveis exige o tipo e a gestão dele', function () {
     $this->getJson('/api/admin/leads/assignees?type=OUTRO')->assertStatus(422);
     $this->getJson('/api/admin/leads/assignees?type=ORACAO')->assertForbidden();
 
-    asStaff('PASTORAL');
+    asStaffWith(['leads.read']);
     $this->getJson('/api/admin/leads/assignees?type=CONTATO')->assertForbidden();
 });
 
@@ -428,12 +432,12 @@ it('BR-081 a exclusão exige o motivo do pedido do titular', function (array $bo
     expect(Lead::query()->whereKey($lead->id)->exists())->toBeTrue();
 })->with([[[]], [['reason' => '']], [['reason' => 'QUALQUER_OUTRO']]]);
 
-it('BR-081 só quem tem a gestão do tipo exclui: a pastoral lê mas não exclui, e o pedido de oração é só da oração', function () {
+it('BR-081 só quem tem a gestão do tipo exclui: quem só lê não exclui, e o pedido de oração é só da oração', function () {
     $visitor = Lead::factory()->visitante()->create();
     $prayer = Lead::factory()->oracao()->create();
     $body = ['reason' => 'TITULAR_REQUEST'];
 
-    asStaff('PASTORAL');
+    asStaffWith(['leads.read', 'leads.oracao.read']);
     $this->deleteJson("/api/admin/leads/{$visitor->id}", $body)->assertForbidden();
     $this->deleteJson("/api/admin/leads/{$prayer->id}", $body)->assertForbidden();
 

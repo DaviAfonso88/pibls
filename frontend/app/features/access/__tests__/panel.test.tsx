@@ -35,7 +35,15 @@ describe("Início do painel", () => {
   });
 
   it.each([
-    ["SECRETARIA", ["Atender contatos", "Horários e avisos do site", "Ministérios e grupos"]],
+    [
+      "SECRETARIA",
+      [
+        "Atender contatos",
+        "Publicar boletim",
+        "Horários e avisos do site",
+        "Ministérios e grupos",
+      ],
+    ],
     [
       "COMUNICACAO",
       [
@@ -47,7 +55,8 @@ describe("Início do painel", () => {
     ],
     ["TESOURARIA", ["Dados do PIX"]],
     ["ORACAO", ["Pedidos de oração"]],
-    ["ADMIN_TECNICO", ["Ver quem tem acesso"]],
+    ["PASTORAL", ["Atender contatos", "Pedidos de oração", "Nova mensagem da Palavra Viva"]],
+    ["ADMIN_TECNICO", ["Horários e avisos do site", "Ver quem tem acesso"]],
   ])("%s só tem os atalhos do que pode fazer", async (role, expected) => {
     mockMe(userFixture(role));
 
@@ -234,8 +243,11 @@ describe("Início do painel", () => {
 
       renderAdmin("/admin");
 
-      expect(await screen.findByText("Não foi possível carregar os contatos agora.")).toBeVisible();
-      await user.click(screen.getByRole("button", { name: "Tentar novamente" }));
+      const message = await screen.findByText("Não foi possível carregar os contatos agora.");
+      expect(message).toBeVisible();
+      // A Secretaria também publica boletim: a seção "Nesta semana" pode ter o seu próprio "Tentar novamente"
+      const block = message.closest("section") as HTMLElement;
+      await user.click(within(block).getByRole("button", { name: "Tentar novamente" }));
       expect(await screen.findByText("Mariana Souza")).toBeVisible();
     });
 
@@ -657,7 +669,7 @@ describe("Nesta semana no Início", () => {
   });
 
   it("quem não publica nada não tem a seção", async () => {
-    mockMe(userFixture("SECRETARIA"));
+    mockMe(userFixture("TESOURARIA"));
 
     renderAdmin("/admin");
 
@@ -707,7 +719,7 @@ describe("Usuários (diretório somente leitura)", () => {
 
   beforeEach(() => {
     mockMe(
-      userFixture("PASTORAL", { id: 1, name: "Pr. Joselito Sena", email: "pastor@pibls.test" }),
+      userFixture("ADMIN_TECNICO", { id: 1, name: "Davi Técnico", email: "tecnico@pibls.test" }),
     );
   });
 
@@ -717,9 +729,9 @@ describe("Usuários (diretório somente leitura)", () => {
         HttpResponse.json({
           data: [
             person({
-              ...userFixture("PASTORAL"),
+              ...userFixture("ADMIN_TECNICO"),
               id: 1,
-              name: "Pr. Joselito Sena",
+              name: "Davi Técnico",
               last_login_at: "2020-03-18T12:00:00Z",
             }),
             person({ id: 2, name: "Ana Secretaria" }),
@@ -746,17 +758,12 @@ describe("Usuários (diretório somente leitura)", () => {
 
     const [pastor, secretaria, leader] = rows as [HTMLElement, HTMLElement, HTMLElement];
     expect(within(pastor).getByText("Você")).toBeVisible();
-    expect(within(pastor).getByText("Pastoral")).toBeVisible();
+    expect(within(pastor).getByText("Administrador técnico")).toBeVisible();
     expect(
       within(pastor)
         .getAllByRole("listitem")
         .map((item) => item.textContent),
-    ).toEqual([
-      "Contatos (só consulta)",
-      "Pedidos de oração (só consulta)",
-      "Palavra Viva",
-      "Lista de usuários",
-    ]);
+    ).toEqual(["Configurações", "Lista de usuários"]);
     expect(within(pastor).getByText("18/03/2020")).toBeVisible();
 
     expect(within(secretaria).getByText("Nunca entrou")).toBeVisible();

@@ -93,14 +93,44 @@ it('semeia as 14 permissões e a matriz dos 7 papéis de referência', function 
         ->pluck('total', 'role_code')->all();
 
     expect($perRole)->toBe([
-        'ADMIN_TECNICO' => 1,
+        'ADMIN_TECNICO' => 2,
         'COMUNICACAO' => 6,
         'LIDER_MINISTERIO' => 2,
         'ORACAO' => 2,
-        'PASTORAL' => 4,
-        'SECRETARIA' => 5,
+        'PASTORAL' => 5,
+        'SECRETARIA' => 6,
         'TESOURARIA' => 1,
     ]);
+});
+
+it('ADR-028 a migration de ajuste leva um banco com a matriz antiga à nova, sem mexer nos usuários, e desfaz', function () {
+    $migration = require database_path('migrations/2026_11_09_100000_adjust_role_templates_for_secretaria_pastoral_admin.php');
+    $has = fn (string $role, string $key) => DB::table('role_templates')->where(['role_code' => $role, 'permission_key' => $key])->exists();
+
+    // Estado anterior ao ADR-028
+    $migration->down();
+    expect($has('SECRETARIA', 'boletins.write'))->toBeFalse()
+        ->and($has('PASTORAL', 'leads.manage'))->toBeFalse()
+        ->and($has('PASTORAL', 'leads.oracao.manage'))->toBeFalse()
+        ->and($has('PASTORAL', 'users.read'))->toBeTrue()
+        ->and($has('ADMIN_TECNICO', 'settings.write'))->toBeFalse();
+
+    $user = userWithRole('PASTORAL');
+    $before = DB::table('user_permissions')->where('user_id', $user->getKey())->count();
+
+    // Idempotente: duas vezes dá o mesmo resultado
+    $migration->up();
+    $migration->up();
+
+    expect($has('SECRETARIA', 'boletins.write'))->toBeTrue()
+        ->and($has('PASTORAL', 'leads.manage'))->toBeTrue()
+        ->and($has('PASTORAL', 'leads.oracao.manage'))->toBeTrue()
+        ->and($has('PASTORAL', 'users.read'))->toBeFalse()
+        ->and($has('ADMIN_TECNICO', 'settings.write'))->toBeTrue()
+        ->and($has('ADMIN_TECNICO', 'users.read'))->toBeTrue()
+        ->and(DB::table('role_templates')->count())->toBe(24)
+        // BR-077: quem já existe mantém a cópia antiga em user_permissions
+        ->and(DB::table('user_permissions')->where('user_id', $user->getKey())->count())->toBe($before);
 });
 
 it('BR-050 semeia todas as chaves de configuração e só notification_recipients é privada', function () {
@@ -140,7 +170,7 @@ it('as migrations de seed são idempotentes: rodar de novo não duplica nem desf
     }
 
     expect(DB::table('permissions')->count())->toBe(14)
-        ->and(DB::table('role_templates')->count())->toBe(21)
+        ->and(DB::table('role_templates')->count())->toBe(24)
         ->and(DB::table('site_settings')->count())->toBe(10)
         ->and(MinistryGroup::query()->count())->toBe(26)
         ->and(DB::table('site_settings')->where('key', 'campaign_notice')->value('value'))->toBe('{"active": false}');

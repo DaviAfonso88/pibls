@@ -26,12 +26,12 @@ const SCREENS = [
 /** O menu de cada papel é o mesmo de `specs/access.spec.ts`: se um mudar sem o outro, um dos dois testes falha. */
 const ROLES: ReadonlyArray<{ role: string; email: string; menu: readonly string[] }> = [
   { role: "COMUNICACAO", email: "comunicacao@pibls.test", menu: ["Início", "Boletins", "Palavra Viva", "Ministérios e grupos", "Configurações"] },
-  { role: "SECRETARIA", email: "secretaria@pibls.test", menu: ["Início", "Contatos", "Ministérios e grupos", "Configurações"] },
+  { role: "SECRETARIA", email: "secretaria@pibls.test", menu: ["Início", "Contatos", "Boletins", "Ministérios e grupos", "Configurações"] },
   { role: "TESOURARIA", email: "tesouraria@pibls.test", menu: ["Início", "PIX"] },
   { role: "ORACAO", email: "oracao@pibls.test", menu: ["Início", "Pedidos de oração"] },
-  { role: "PASTORAL", email: "pastoral@pibls.test", menu: ["Início", "Contatos", "Pedidos de oração", "Palavra Viva", "Usuários"] },
+  { role: "PASTORAL", email: "pastoral@pibls.test", menu: ["Início", "Contatos", "Pedidos de oração", "Palavra Viva"] },
   { role: "LIDER_MINISTERIO", email: "lider@pibls.test", menu: ["Início"] },
-  { role: "ADMIN_TECNICO", email: "admin@pibls.test", menu: ["Início", "Usuários"] },
+  { role: "ADMIN_TECNICO", email: "admin@pibls.test", menu: ["Início", "Configurações", "Usuários"] },
 ];
 
 test.describe("painel por papel, tela a tela @a11y", () => {

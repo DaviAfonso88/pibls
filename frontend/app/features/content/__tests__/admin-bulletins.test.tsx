@@ -141,7 +141,7 @@ describe("lista", () => {
   });
 
   it("BR-076 quem não tem boletins.write vê 'sem acesso' e nem consulta a API", async () => {
-    mockMe(userFixture("SECRETARIA"));
+    mockMe(userFixture("PASTORAL"));
     let called = false;
     server.use(
       http.get("*/api/admin/bulletins", () => {

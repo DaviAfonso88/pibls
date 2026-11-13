@@ -215,9 +215,7 @@ test.describe("atendimento dos contatos @us4", () => {
     expect(list.status()).toBe(200);
   });
 
-  test("Pastoral: lê as duas caixas, sem poder atender nem excluir", async ({
-    page,
-  }) => {
+  test("Pastoral (ADR-028): lê e atende as duas caixas", async ({ page }) => {
     await signIn(page, "pastoral@pibls.test");
 
     await page.goto(`/admin/contatos?q=${RUN}&status=`);
@@ -227,13 +225,10 @@ test.describe("atendimento dos contatos @us4", () => {
     ).toBeVisible();
     await expect(
       page.getByText("Você pode ler este contato, mas não atendê-lo."),
-    ).toBeVisible();
-    await expect(
-      page.getByRole("button", { name: "Começar atendimento" }),
     ).toHaveCount(0);
     await expect(
       page.getByRole("button", { name: "Excluir dados desta pessoa" }),
-    ).toHaveCount(0);
+    ).toBeVisible();
 
     await page.goto("/admin/oracao");
     await expect(

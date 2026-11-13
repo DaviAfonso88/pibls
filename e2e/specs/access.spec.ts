@@ -43,17 +43,17 @@ const ROLES: Array<{ role: string; email: string; menu: string[] }> = [
   {
     role: "SECRETARIA",
     email: "secretaria@pibls.test",
-    menu: ["Início", "Contatos", "Ministérios e grupos", "Configurações"],
+    menu: ["Início", "Contatos", "Boletins", "Ministérios e grupos", "Configurações"],
   },
   { role: "TESOURARIA", email: "tesouraria@pibls.test", menu: ["Início", "PIX"] },
   { role: "ORACAO", email: "oracao@pibls.test", menu: ["Início", "Pedidos de oração"] },
   {
     role: "PASTORAL",
     email: "pastoral@pibls.test",
-    menu: ["Início", "Contatos", "Pedidos de oração", "Palavra Viva", "Usuários"],
+    menu: ["Início", "Contatos", "Pedidos de oração", "Palavra Viva"],
   },
   { role: "LIDER_MINISTERIO", email: "lider@pibls.test", menu: ["Início"] },
-  { role: "ADMIN_TECNICO", email: "admin@pibls.test", menu: ["Início", "Usuários"] },
+  { role: "ADMIN_TECNICO", email: "admin@pibls.test", menu: ["Início", "Configurações", "Usuários"] },
 ];
 
 test.describe("acesso ao painel @us3", () => {
@@ -179,7 +179,7 @@ test.describe("acesso ao painel @us3", () => {
     await check();
 
     await page.goto("/admin/entrar");
-    await signIn(page, "pastoral@pibls.test");
+    await signIn(page, "admin@pibls.test");
     // a tela de entrada também tem um h1: espera a navegação para o painel antes de olhar
     await expect(page).toHaveURL(/\/admin$/);
     await expect(page.getByRole("heading", { level: 1 })).toContainText(/, Teste/);

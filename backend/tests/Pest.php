@@ -70,6 +70,24 @@ function userWithRole(string $role, array $attributes = []): User
 }
 
 /**
+ * Cria um usuário ativo com exatamente estas permissões (`role_code` é só rótulo de origem). Serve para testar um perfil
+ * que nenhum papel de referência tem, como "só lê contatos" depois do ADR-028.
+ *
+ * @param  list<string>  $permissionKeys
+ * @param  array<string, mixed>  $attributes
+ */
+function userWithPermissions(array $permissionKeys, array $attributes = []): User
+{
+    $user = User::factory()->create($attributes);
+
+    foreach ($permissionKeys as $key) {
+        DB::table('user_permissions')->insert(['user_id' => $user->getKey(), 'role_code' => 'TESTE', 'permission_key' => $key]);
+    }
+
+    return $user;
+}
+
+/**
  * Entra no painel como o usuário do papel (sessão com o instante do login, como o `Login` grava) e o devolve. Os testes
  * seguintes de `$this->getJson(...)` já saem autenticados.
  *
@@ -78,6 +96,20 @@ function userWithRole(string $role, array $attributes = []): User
 function asStaff(string $role, array $attributes = []): User
 {
     $user = userWithRole($role, $attributes);
+
+    test()->actingAs($user)->withSession([EnforceSessionLimits::LOGIN_AT => time()]);
+
+    return $user;
+}
+
+/**
+ * Entra no painel como um usuário só com estas permissões (ver `userWithPermissions`).
+ *
+ * @param  list<string>  $permissionKeys
+ */
+function asStaffWith(array $permissionKeys): User
+{
+    $user = userWithPermissions($permissionKeys);
 
     test()->actingAs($user)->withSession([EnforceSessionLimits::LOGIN_AT => time()]);
 

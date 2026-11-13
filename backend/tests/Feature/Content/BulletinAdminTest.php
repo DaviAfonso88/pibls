@@ -406,8 +406,8 @@ it('BR-076 só quem tem boletins.write mexe nos boletins', function (string $rol
     test()->postJson('/api/admin/bulletins', [])->assertStatus($status === 200 ? 422 : $status);
 })->with([
     'Comunicação' => ['COMUNICACAO', 200],
-    'Administrador técnico (só lê usuários)' => ['ADMIN_TECNICO', 403],
-    'Secretaria' => ['SECRETARIA', 403],
+    'Secretaria (ADR-028)' => ['SECRETARIA', 200],
+    'Administrador técnico (usuários e configurações)' => ['ADMIN_TECNICO', 403],
     'Tesouraria' => ['TESOURARIA', 403],
     'Oração' => ['ORACAO', 403],
     'Pastoral' => ['PASTORAL', 403],

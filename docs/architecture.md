@@ -602,22 +602,22 @@ Nome, telefone e e-mail aparecem conforme as chaves do evento (`asks_participant
 
 | Permissão | COMUNICACAO | SECRETARIA | TESOURARIA | ORACAO | PASTORAL | LIDER_MINISTERIO | ADMIN_TECNICO |
 |---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
-| `boletins.write` | ✓ | | | | | | |
+| `boletins.write` | ✓ | ✓ | | | | | |
 | `mensagens.write` | ✓ | | | | ✓ | | |
 | `eventos.write` | ✓ | | | | | | |
 | `eventos.write.own` | | | | | | ✓ | |
 | `eventos.inscricoes.read` | ✓ | ✓ | | | | | |
 | `eventos.inscricoes.read.own` | | | | | | ✓ | |
 | `leads.read` | | ✓ | | | ✓ | | |
-| `leads.manage` | | ✓ | | | | | |
+| `leads.manage` | | ✓ | | | ✓ | | |
 | `leads.oracao.read` | | | | ✓ | ✓ | | |
-| `leads.oracao.manage` | | | | ✓ | | | |
+| `leads.oracao.manage` | | | | ✓ | ✓ | | |
 | `ministerios.write` | ✓ | ✓ | | | | | |
-| `settings.write` | ✓ | ✓ | | | | | |
+| `settings.write` | ✓ | ✓ | | | | | ✓ |
 | `pix.write` | | | ✓ | | | | |
-| `users.read` | | | | | ✓ | | ✓ |
+| `users.read` | | | | | | | ✓ |
 
-> **ADMIN_TECNICO** tem só `users.read` na aplicação, por menor privilégio. O acesso amplo desse papel acontece pelo cPanel/phpMyAdmin, fora da aplicação.
+> **ADMIN_TECNICO** tem só `users.read` e `settings.write` na aplicação (ADR-028), por menor privilégio. O acesso amplo desse papel acontece pelo cPanel/phpMyAdmin, fora da aplicação.
 
 ## Fora da aplicação: provisionamento de usuários
 
@@ -2013,6 +2013,14 @@ O site público é pré-renderizado e tem o JS inicial limitado a 160 KB gzip po
 
 **Decisão**: `GET /api/admin/events/{id}` passa a aceitar também `eventos.inscricoes.read[.own]` (`EventPolicy::view`), no mesmo escopo da leitura de inscritos (`.own`: próprio ministério e eventos gerais; fora dele, 404). No painel, "Eventos" e `/admin/eventos` abrem para quem lê inscritos, em modo de consulta (sem "Novo evento" nem "Editar"; o nome leva aos inscritos). Criar, alterar, excluir e cancelar inscrição continuam só com escrita, e os botões de editar e cancelar são decididos por evento. Corrige a tela de inscritos da Secretaria, que recebia 403 ao carregar o evento.
 
+### ADR-028 — Ajuste da matriz dos papéis de referência (Secretaria, Pastoral, Administrador técnico)
+
+- **Status:** Aceita
+- **Data:** 2026-11-09 (pedido do responsável)
+- Texto completo em `docs/adr/0028-ajuste-da-matriz-dos-papeis-de-referencia.md`.
+
+**Decisão**: `SECRETARIA` ganha `boletins.write`; `PASTORAL` ganha `leads.manage` e `leads.oracao.manage` e perde `users.read`; `ADMIN_TECNICO` ganha `settings.write` (e mantém `users.read`). Muda só o modelo em `role_templates` (seed e migration `…_adjust_role_templates_*`, idempotente); o catálogo de 14 chaves não muda. Quem já existe mantém a cópia em `user_permissions` até o administrador técnico aplicar o SQL do runbook (BR-077). *Trade-off aceito*: a Pastoral passa a alterar status, responsável e anotações de contatos e de pedidos de oração, e deixa de ver o diretório de usuários.
+
 # Technology Stack
 
 > **Regra de versões**: a tabela traz a **linha de versão** escolhida. A versão exata (patch) é fixada no início da implementação (tarefa F0-01) com a última estável disponível, e passa a ser a fonte de verdade em `composer.lock` e `package-lock.json`, ambos versionados. `engines` (package.json) e `config.platform.php` (composer.json) travam os runtimes. A compatibilidade com a hospedagem segue a página da HostGator (Links úteis).
@@ -2975,19 +2983,19 @@ A troca da identidade visual mexe só nas variáveis de `app/app.css` (ADR-018).
 
 | Recurso / ação | COMUNICACAO | SECRETARIA | TESOURARIA | ORACAO | PASTORAL | LIDER_MINISTERIO | ADMIN_TECNICO |
 |---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
-| Boletins: criar/editar/excluir | ✓ | | | | | | |
+| Boletins: criar/editar/excluir | ✓ | ✓ | | | | | |
 | Palavra Viva: criar/editar/excluir | ✓ | | | | ✓ | | |
 | Eventos: criar/editar/publicar/excluir | ✓ | | | | | own | |
 | Inscrições: ver/exportar | ✓ | ✓ | | | | own | |
 | Inscrições: cancelar/excluir | ✓ | | | | | own | |
 | Contatos gerais: ver | | ✓ | | | ✓ | | |
-| Contatos gerais: atender/excluir | | ✓ | | | | | |
+| Contatos gerais: atender/excluir | | ✓ | | | ✓ | | |
 | Pedidos de oração: ver | | | | ✓ | ✓ | | |
-| Pedidos de oração: atender/excluir | | | | ✓ | | | |
+| Pedidos de oração: atender/excluir | | | | ✓ | ✓ | | |
 | Ministérios/grupos/células: gerenciar | ✓ | ✓ | | | | | |
-| Configurações: editar | ✓ | ✓ | | | | | |
+| Configurações: editar | ✓ | ✓ | | | | | ✓ |
 | PIX: editar | | | ✓ | | | | |
-| Usuários: ver diretório | | | | | ✓ | | ✓ |
+| Usuários: ver diretório | | | | | | | ✓ |
 | Usuários e permissões: criar/alterar | — fora da aplicação (phpMyAdmin) — |||||||
 
 ### Gestão de segredos
@@ -3092,7 +3100,7 @@ Parâmetros na tabela "Limites por rota" (API Standards). Store `database`, chav
 
 | Camada | Aplicação |
 |---|---|
-| Usuários do painel | Permissões atômicas; papéis de referência mínimos; `ADMIN_TECNICO` só com `users.read` |
+| Usuários do painel | Permissões atômicas; papéis de referência mínimos; `ADMIN_TECNICO` só com `users.read` e `settings.write` |
 | Banco | `pibls_app` só DML; `pibls_migrator` usado só pelo ativador; MySQL remoto desligado |
 | Arquivos | `.env` com permissão 600; diretórios 755; arquivos 644; nada executável em `uploads/` |
 | CI | FTP restrito à caixa de entrada; segredos de app não passam pelo CI |

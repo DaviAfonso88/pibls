@@ -18,6 +18,7 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
     "settings.write",
   ],
   SECRETARIA: [
+    "boletins.write",
     "eventos.inscricoes.read",
     "leads.manage",
     "leads.read",
@@ -26,9 +27,15 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
   ],
   TESOURARIA: ["pix.write"],
   ORACAO: ["leads.oracao.manage", "leads.oracao.read"],
-  PASTORAL: ["leads.oracao.read", "leads.read", "mensagens.write", "users.read"],
+  PASTORAL: [
+    "leads.manage",
+    "leads.oracao.manage",
+    "leads.oracao.read",
+    "leads.read",
+    "mensagens.write",
+  ],
   LIDER_MINISTERIO: ["eventos.inscricoes.read.own", "eventos.write.own"],
-  ADMIN_TECNICO: ["users.read"],
+  ADMIN_TECNICO: ["settings.write", "users.read"],
 };
 
 export function userFixture(role: string, overrides: Partial<AuthUser> = {}): AuthUser {

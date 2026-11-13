@@ -53,7 +53,7 @@ describe("RequireAuth", () => {
   });
 
   it("com sessão, mostra a tela pedida dentro do menu", async () => {
-    mockMe(userFixture("PASTORAL"));
+    mockMe(userFixture("ADMIN_TECNICO"));
 
     renderAdmin("/admin/usuarios");
 
@@ -62,7 +62,7 @@ describe("RequireAuth", () => {
   });
 
   it("a rota de entrada, com sessão aberta, leva ao painel (ou à rota de ?voltar)", async () => {
-    mockMe(userFixture("PASTORAL"));
+    mockMe(userFixture("ADMIN_TECNICO"));
 
     const { router } = renderAdmin("/admin/entrar?voltar=%2Fadmin%2Fusuarios");
 
@@ -81,7 +81,7 @@ describe("RequireAuth", () => {
 
 describe("401 no meio do uso", () => {
   it("limpa a sessão, volta ao login e avisa 'Sua sessão expirou. Entre novamente.'", async () => {
-    mockMe(userFixture("PASTORAL"));
+    mockMe(userFixture("ADMIN_TECNICO"));
     server.use(
       http.get("*/api/admin/users", () => HttpResponse.json(UNAUTHENTICATED, { status: 401 })),
     );
@@ -131,7 +131,7 @@ describe("RequirePermission", () => {
   });
 
   it("mesmo com o guard liberando por engano, a API é quem recusa (403 mostra o erro)", async () => {
-    mockMe(userFixture("PASTORAL"));
+    mockMe(userFixture("ADMIN_TECNICO"));
     server.use(
       http.get("*/api/admin/users", () =>
         HttpResponse.json(
@@ -167,12 +167,12 @@ describe("menu por permissão", () => {
       "COMUNICACAO",
       ["Início", "Boletins", "Palavra Viva", "Ministérios e grupos", "Configurações"],
     ],
-    ["SECRETARIA", ["Início", "Contatos", "Ministérios e grupos", "Configurações"]],
+    ["SECRETARIA", ["Início", "Contatos", "Boletins", "Ministérios e grupos", "Configurações"]],
     ["TESOURARIA", ["Início", "PIX"]],
     ["ORACAO", ["Início", "Pedidos de oração"]],
-    ["PASTORAL", ["Início", "Contatos", "Pedidos de oração", "Palavra Viva", "Usuários"]],
+    ["PASTORAL", ["Início", "Contatos", "Pedidos de oração", "Palavra Viva"]],
     ["LIDER_MINISTERIO", ["Início"]],
-    ["ADMIN_TECNICO", ["Início", "Usuários"]],
+    ["ADMIN_TECNICO", ["Início", "Configurações", "Usuários"]],
   ])(
     "%s vê só o que a permissão abre (Eventos fica escondido com a flag desligada)",
     async (role, expected) => {
@@ -214,6 +214,7 @@ describe("menu por permissão", () => {
     expect(labels).toEqual([
       "Início",
       "Contatos",
+      "Boletins",
       "Eventos",
       "Ministérios e grupos",
       "Configurações",
@@ -305,7 +306,7 @@ describe("sair", () => {
   });
 
   it("FR-077 a sessão que expira NÃO apaga o rascunho: ele é oferecido depois de entrar de novo", async () => {
-    mockMe(userFixture("PASTORAL")); // quem abre /admin/usuarios
+    mockMe(userFixture("ADMIN_TECNICO")); // quem abre /admin/usuarios
     window.localStorage.setItem("pibls:draft:7:boletim:novo", "{}");
     server.use(
       http.get("*/api/admin/users", () => HttpResponse.json(UNAUTHENTICATED, { status: 401 })),
